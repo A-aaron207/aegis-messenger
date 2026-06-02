@@ -1,13 +1,12 @@
-const CACHE_NAME = 'aegis-cache-v1';
+const CACHE_NAME = 'aegis-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
 ];
 
-// Install Event
+// Install Event — cache static assets only (NOT index.html — always fetch fresh)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -17,7 +16,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event
+// Activate Event — clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -33,17 +32,46 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event (Network-first falling back to Cache for instant loads and offline shell)
+// Fetch Event — Network-first for HTML, cache-first for static assets
 self.addEventListener('fetch', (event) => {
-  // Only intercept HTTP/S GET requests
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
+  // For HTML navigation requests: ALWAYS go network-first, never serve stale HTML
+  const isNavigation = event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'));
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cached) => {
+            return cached || caches.match('/');
+          });
+        })
+    );
+    return;
+  }
+
+  // For API requests: never cache, always network
+  if (event.request.url.includes('/api/') || event.request.url.includes('/users/')) {
+    return;
+  }
+
+  // For static assets (images, manifest, etc.): network-first with cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // If successful, clone response and update cache
         if (response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -53,16 +81,7 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // If network fails, serve from cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If fallback fails and requesting html, return home shell
-          if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html')) {
-            return caches.match('/index.html');
-          }
-        });
+        return caches.match(event.request);
       })
   );
 });

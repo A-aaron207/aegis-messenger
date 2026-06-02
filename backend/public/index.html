@@ -207,6 +207,7 @@
       display: none;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       grid-template-columns: 72px 340px 1fr;
       overflow: hidden;
     }
@@ -726,13 +727,14 @@
         grid-row: 2;
         flex-direction: row !important;
         width: 100% !important;
-        height: calc(60px + env(safe-area-inset-bottom)) !important;
-        padding: 0 10px env(safe-area-inset-bottom) 10px !important;
+        height: calc(56px + env(safe-area-inset-bottom)) !important;
+        padding: 0 8px env(safe-area-inset-bottom) 8px !important;
         border-right: none !important;
         border-top: 1px solid var(--border-color);
-        justify-content: space-around !important;
+        justify-content: space-evenly !important;
         align-items: center !important;
         z-index: 40;
+        gap: 0 !important;
       }
 
       .rail-top {
@@ -740,7 +742,11 @@
       }
 
       .rail-top .icon-brand {
-        display: none !important; /* Hide brand icon in mobile bottom bar */
+        display: none !important;
+      }
+
+      .nav-rail > .rail-btn {
+        margin: 0 !important;
       }
 
       .sidebar-panel {
@@ -784,9 +790,11 @@
       }
 
       .rail-btn {
-        width: 40px !important;
-        height: 40px !important;
-        font-size: 20px !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 18px !important;
+        padding: 4px !important;
+        min-width: 36px;
       }
     }
 
@@ -1037,7 +1045,6 @@
         <button class="rail-btn" id="rail-discover-btn" onclick="navigateToPanel('discover')" title="Search & Discovery">🔍</button>
         <button class="rail-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Switch Light/Dark Mode">☀️</button>
         <button class="rail-btn" id="rail-passport-btn" onclick="togglePassportModal()" title="Secure Passport (QR Pairing)">🪪</button>
-        <button class="rail-btn" id="rail-welcome-btn" onclick="toggleWelcomeModal(true)" title="About Aegis & Privacy">ℹ️</button>
       </div>
       <button class="rail-btn" onclick="handleLogout()" title="Lock Vault & Logout" style="color: var(--danger-color);">🚪</button>
     </div>
@@ -2718,26 +2725,23 @@
             const hist = chatHistories[sender] || [];
             const msgObj = hist.find(m => m.id === packet.messageId);
             if (msgObj) {
-              let sessionKey = derivedSessionKey;
-              if (sender !== activeRecipient) {
-                const res = await fetch(`/api/user/${sender}`);
-                const data = await res.json();
-                const peerPubKeyObj = await window.crypto.subtle.importKey(
-                  "spki",
-                  base64ToArrayBuffer(data.publicKey),
-                  { name: "ECDH", namedCurve: "P-256" },
-                  true,
-                  []
-                );
+              const editKeyRes = await fetch(`/api/user/${sender}`);
+              const editKeyData = await editKeyRes.json();
+              const peerPubKeyObj = await window.crypto.subtle.importKey(
+                "spki",
+                base64ToArrayBuffer(editKeyData.publicKey),
+                { name: "ECDH", namedCurve: "P-256" },
+                true,
+                []
+              );
 
-                sessionKey = await window.crypto.subtle.deriveKey(
-                  { name: "ECDH", public: peerPubKeyObj },
-                  myKeyPairObj.privateKey,
-                  { name: "AES-GCM", length: 256 },
-                  true,
-                  ["encrypt", "decrypt"]
-                );
-              }
+              const sessionKey = await window.crypto.subtle.deriveKey(
+                { name: "ECDH", public: peerPubKeyObj },
+                myKeyPairObj.privateKey,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+              );
 
               const ivBytes = new Uint8Array(base64ToArrayBuffer(packet.iv));
               const ciphertextBytes = base64ToArrayBuffer(packet.ciphertext);
@@ -2769,13 +2773,18 @@
           if (type === 'message') {
             const { iv, ciphertext, timestamp, replyTo, isFile, id } = packet;
 
-            let sessionKey = derivedSessionKey;
-            if (sender !== activeRecipient) {
-              const res = await fetch(`/api/user/${sender}`);
-              const data = await res.json();
+            // ALWAYS derive a fresh session key from the sender's server-registered public key.
+            // Never trust the cached derivedSessionKey because it may be null or stale
+            // (e.g. the recipient has a different chat open, or no chat open at all).
+            let sessionKey;
+            try {
+              const senderKeyRes = await fetch(`/api/user/${sender}`);
+              const senderKeyData = await senderKeyRes.json();
+              if (!senderKeyData.publicKey) throw new Error('Sender public key not found on server');
+              
               const peerPubKeyObj = await window.crypto.subtle.importKey(
                 "spki",
-                base64ToArrayBuffer(data.publicKey),
+                base64ToArrayBuffer(senderKeyData.publicKey),
                 { name: "ECDH", namedCurve: "P-256" },
                 true,
                 []
@@ -2788,30 +2797,36 @@
                 true,
                 ["encrypt", "decrypt"]
               );
+              
+              // Cache the sender's public key for future use
+              localStorage.setItem(`peer_key_${sender}`, senderKeyData.publicKey);
+            } catch (keyErr) {
+              console.error(`Failed to derive session key for sender ${sender}:`, keyErr.message);
+              return;
+            }
 
+            if (sender !== activeRecipient) {
               unreadCounts[sender] = (unreadCounts[sender] || 0) + 1;
             }
 
             const ivBytes = new Uint8Array(base64ToArrayBuffer(iv));
             const ciphertextBytes = base64ToArrayBuffer(ciphertext);
-            const decryptedBytes = await window.crypto.subtle.decrypt(
-              { name: "AES-GCM", iv: ivBytes },
-              sessionKey,
-              ciphertextBytes
-            );
+            let decryptedBytes;
+            try {
+              decryptedBytes = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBytes },
+                sessionKey,
+                ciphertextBytes
+              );
+            } catch (decryptErr) {
+              console.error(`Decryption failed for message from ${sender}:`, decryptErr.message);
+              return;
+            }
 
             const plaintext = new TextDecoder().decode(decryptedBytes);
 
             const envelope = { sender, recipient: myUsername, iv, ciphertext, timestamp, replyTo, isFile, id };
             saveLocalEnvelope(sender, envelope);
-
-            // Auto-contact creation on first E2EE envelope
-            const cachedKey = localStorage.getItem(`peer_key_${sender}`);
-            if (!cachedKey) {
-              const res = await fetch(`/api/user/${sender}`);
-              const data = await res.json();
-              localStorage.setItem(`peer_key_${sender}`, data.publicKey);
-            }
 
             if (!chatHistories[sender]) {
               chatHistories[sender] = [];
@@ -2833,7 +2848,6 @@
                 isFile
               });
               
-              // If it was already marked as read, update localStorage envelope status
               if (initialStatus === 'read') {
                 updateLocalStorageMessageState(sender, msgId, { status: 'read' });
               } else {
@@ -2859,7 +2873,7 @@
             }
           }
         } catch (e) {
-          console.error("WS Incoming packet listener error: ", e.message);
+          console.error("WS Incoming packet listener error: ", e.message, e.stack);
         }
       };
 
