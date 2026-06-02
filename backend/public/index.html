@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Aegis — End-to-End Encrypted Messenger</title>
   
   <!-- Progressive Web App Configuration -->
@@ -65,6 +65,7 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
       transition: background-color 0.3s, color 0.3s;
     }
@@ -725,8 +726,8 @@
         grid-row: 2;
         flex-direction: row !important;
         width: 100% !important;
-        height: 60px !important;
-        padding: 0 20px !important;
+        height: calc(60px + env(safe-area-inset-bottom)) !important;
+        padding: 0 10px env(safe-area-inset-bottom) 10px !important;
         border-right: none !important;
         border-top: 1px solid var(--border-color);
         justify-content: space-around !important;
@@ -735,11 +736,7 @@
       }
 
       .rail-top {
-        flex-direction: row !important;
-        justify-content: space-around !important;
-        width: auto !important;
-        flex: 1 !important;
-        gap: 0 !important;
+        display: contents !important;
       }
 
       .rail-top .icon-brand {
@@ -1006,10 +1003,18 @@
     <h2 style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">Aegis Messenger</h2>
     <div class="subtitle" style="margin-bottom: 24px; color: var(--text-muted); font-size: 13px; text-transform: lowercase;">end-to-end encrypted messenger</div>
 
-    <form id="auth-form" onsubmit="handleAuth(event)">
-      <input type="text" id="username-input" name="username" placeholder="Enter secure username..." required autocomplete="username">
-      <input type="password" id="password-input" name="password" placeholder="Enter identity password..." required autocomplete="current-password">
-      <button type="submit" id="auth-btn" class="primary" style="width: 100%;">Unlock Identity Vault</button>
+    <!-- Login Form with correct autocomplete attributes to prevent password manager warnings -->
+    <form id="login-form" onsubmit="handleAuth(event, 'login')">
+      <input type="text" id="login-username-input" name="username" placeholder="Enter secure username..." required autocomplete="username">
+      <input type="password" id="login-password-input" name="password" placeholder="Enter identity password..." required autocomplete="current-password">
+      <button type="submit" id="login-auth-btn" class="primary" style="width: 100%;">Unlock Identity Vault</button>
+    </form>
+
+    <!-- Register Form with correct autocomplete attributes to prevent password manager warnings -->
+    <form id="register-form" onsubmit="handleAuth(event, 'register')" style="display: none;">
+      <input type="text" id="register-username-input" name="username" placeholder="Choose secure username..." required autocomplete="username">
+      <input type="password" id="register-password-input" name="password" placeholder="Choose strong password..." required autocomplete="new-password">
+      <button type="submit" id="register-auth-btn" class="primary" style="width: 100%;">Generate & Register Identity</button>
     </form>
     
     <div style="margin-top: 24px; text-align: center; font-size: 12px;">
@@ -1340,7 +1345,8 @@
       // Auto-restore username to pre-populate login screen if they logged in before
       const savedUser = localStorage.getItem("last_logged_in_username");
       if (savedUser) {
-        document.getElementById('username-input').value = savedUser;
+        const input = document.getElementById('login-username-input');
+        if (input) input.value = savedUser;
         setAuthMode('login');
       }
 
@@ -1412,21 +1418,21 @@
 
     function setAuthMode(mode) {
       authMode = mode;
-      const btn = document.getElementById('auth-btn');
+      const loginForm = document.getElementById('login-form');
+      const registerForm = document.getElementById('register-form');
       const switchText = document.getElementById('auth-switch-text');
       const switchLink = document.getElementById('auth-switch-link');
-      const passwordInput = document.getElementById('password-input');
       
       if (mode === 'register') {
-        btn.innerText = "Generate & Register Identity";
+        if (loginForm) loginForm.style.display = 'none';
+        if (registerForm) registerForm.style.display = 'block';
         if (switchText) switchText.innerText = "Already registered on this device?";
         if (switchLink) switchLink.innerText = "Unlock Identity Vault";
-        if (passwordInput) passwordInput.setAttribute('autocomplete', 'new-password');
       } else {
-        btn.innerText = "Unlock Identity Vault";
+        if (loginForm) loginForm.style.display = 'block';
+        if (registerForm) registerForm.style.display = 'none';
         if (switchText) switchText.innerText = "First time using Aegis on this device?";
         if (switchLink) switchLink.innerText = "Register New Vault";
-        if (passwordInput) passwordInput.setAttribute('autocomplete', 'current-password');
       }
     }
 
@@ -1488,30 +1494,60 @@
       }
     }
 
-    // Close chat panel mobile helper
-    function closeChatMobile() {
+    // Close chat panel mobile helper with history back integration
+    let isHistoryBacking = false;
+    
+    function closeChatMobile(fromPopState = false) {
+      if (!document.body.classList.contains('chat-active')) return;
+      
       document.body.classList.remove('chat-active');
       activeRecipient = null;
       syncContacts();
+      
+      if (!fromPopState) {
+        if (history.state && history.state.activeChat) {
+          isHistoryBacking = true;
+          history.back();
+        }
+      }
     }
 
+    // Hardware back-button / system swipe gesture listener to close chat panel without exiting app
+    window.addEventListener('popstate', (event) => {
+      if (isHistoryBacking) {
+        isHistoryBacking = false;
+        return;
+      }
+      if (document.body.classList.contains('chat-active')) {
+        closeChatMobile(true);
+      }
+    });
+
     // AUTH PROCESS: Generate / Unlock Identity
-    async function handleAuth(event) {
+    async function handleAuth(event, mode) {
       event.preventDefault();
-      const usernameInput = document.getElementById('username-input');
-      const passwordInput = document.getElementById('password-input');
+      
+      const usernameId = mode === 'register' ? 'register-username-input' : 'login-username-input';
+      const passwordId = mode === 'register' ? 'register-password-input' : 'login-password-input';
+      const btnId = mode === 'register' ? 'register-auth-btn' : 'login-auth-btn';
+      
+      const usernameInput = document.getElementById(usernameId);
+      const passwordInput = document.getElementById(passwordId);
       
       const username = usernameInput.value.trim().toLowerCase();
       const password = passwordInput.value;
 
       if (!username || !password) return;
-      document.getElementById('auth-btn').innerText = "Processing Key Vault...";
+      
+      const btn = document.getElementById(btnId);
+      const originalText = btn.innerText;
+      btn.innerText = "Processing Key Vault...";
 
       try {
-        if (authMode === 'register') {
+        if (mode === 'register') {
           if (localStorage.getItem(`enc_priv_${username}`)) {
             alert("An identity for this user already exists on this device!");
-            document.getElementById('auth-btn').innerText = "Generate & Register Identity";
+            btn.innerText = originalText;
             return;
           }
 
@@ -1559,6 +1595,7 @@
           if (!encPriv || !saltBase64 || !wrapIvBase64 || !pubBase64) {
             alert("No secure vault found for this username on this device!");
             setAuthMode('register');
+            btn.innerText = originalText;
             return;
           }
 
@@ -1576,9 +1613,7 @@
               encPrivBuffer
             );
           } catch (err) {
-            alert("Invalid password! Failed to unwrap key vault.");
-            document.getElementById('auth-btn').innerText = "Unlock Identity";
-            return;
+            throw new Error("Invalid password or corrupted vault.");
           }
 
           const privKeyObj = await window.crypto.subtle.importKey(
@@ -1637,9 +1672,9 @@
 
       } catch (e) {
         alert("Authentication failed: " + e.message);
-        document.getElementById('auth-btn').innerText = authMode === 'register' ? "Generate & Register Identity" : "Unlock Identity";
+        btn.innerText = originalText;
       }
-    }
+    };
 
     async function deriveWrappingKeyFromPassword(password, salt) {
       const encoder = new TextEncoder();
@@ -1984,6 +2019,11 @@
       // Save last active chat session
       localStorage.setItem(`last_active_recipient_${myUsername}`, peer);
       
+      // Handle mobile hardware/gesture back-button support using HTML5 History API
+      if (window.innerWidth <= 768) {
+        history.pushState({ activeChat: peer }, '');
+      }
+      
       // Render active header title & presence status & verification badge
       renderActiveChatHeader();
       
@@ -2004,7 +2044,10 @@
         localStorage.setItem(`presence_${peer}`, data.status);
       }
       
-      if (savedPeerKey && savedPeerKey !== data.publicKey) {
+      if (!savedPeerKey) {
+        localStorage.setItem(`peer_key_${peer}`, data.publicKey);
+        peerPublicKeyBase64 = data.publicKey;
+      } else if (savedPeerKey !== data.publicKey) {
         localStorage.removeItem(`verified_${myUsername}_${peer}`); // Clear verification on mitigation alert
         document.getElementById('mitm-peer-name').innerText = peer;
         document.getElementById('mitm-modal').style.display = 'flex';
@@ -4115,7 +4158,12 @@
       
       document.getElementById('chat-workspace').style.display = 'none';
       document.getElementById('auth-screen').style.display = 'block';
-      document.getElementById('password-input').value = '';
+      if (document.getElementById('login-password-input')) {
+        document.getElementById('login-password-input').value = '';
+      }
+      if (document.getElementById('register-password-input')) {
+        document.getElementById('register-password-input').value = '';
+      }
       setAuthMode('login');
     }
   </script>
