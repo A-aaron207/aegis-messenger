@@ -1,0 +1,4109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aegis — End-to-End Encrypted Messenger</title>
+  
+  <!-- Progressive Web App Configuration -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#000000">
+  
+  <!-- iOS / Apple Native App Standalone Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Aegis">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      /* DARK MODE (DEFAULT INSTAGRAM DARK) */
+      --bg-main: #000000;
+      --bg-sidebar: #000000;
+      --bg-panel: #121212;
+      --border-color: #262626;
+      --text-main: #f5f5f5;
+      --text-muted: #a8a8a8;
+      --bubble-incoming: #262626;
+      --bubble-outgoing-grad: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      --indigo-accent: #0095f6;
+      --input-bg: #121212;
+      --danger-color: #ed4956;
+      --emerald-color: #00f2fe;
+    }
+
+    body.light-theme {
+      /* LIGHT MODE (INSTAGRAM LIGHT) */
+      --bg-main: #ffffff;
+      --bg-sidebar: #ffffff;
+      --bg-panel: #ffffff;
+      --border-color: #dbdbdb;
+      --text-main: #000000;
+      --text-muted: #737373;
+      --bubble-incoming: #efefef;
+      --bubble-outgoing-grad: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      --indigo-accent: #0095f6;
+      --input-bg: #ffffff;
+      --danger-color: #ed4956;
+      --emerald-color: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* RECONNECT BANNER */
+    #reconnect-banner {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(245, 158, 11, 0.15);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 10px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #f59e0b;
+      z-index: 100;
+    }
+
+    /* IN-APP TOAST */
+    #notification-toast {
+      display: none;
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      z-index: 150;
+      cursor: pointer;
+      animation: slideInRight 0.3s forwards;
+      max-width: 320px;
+    }
+
+    /* CRITICAL MITM ALERTS */
+    #mitm-modal {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 200;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .mitm-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 480px;
+      padding: 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    /* 1. AUTH SCREEN */
+    #auth-screen {
+      background-color: var(--bg-panel);
+      padding: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 380px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .icon-brand {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .auth-toggle {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      background: var(--bg-main);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .toggle-btn.active {
+      background-color: var(--indigo-accent);
+      color: white;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+
+    button.primary {
+      padding: 10px 16px;
+      background-color: var(--indigo-accent);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button.primary:hover {
+      opacity: 0.9;
+    }
+
+    /* 2. INSTAGRAM-STYLE WORKSPACE */
+    #chat-workspace {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      grid-template-columns: 72px 340px 1fr;
+      overflow: hidden;
+    }
+
+    /* RAIL NAVIGATION BAR (LEFT) */
+    .nav-rail {
+      background-color: var(--bg-main);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 0;
+      justify-content: space-between;
+    }
+
+    .rail-top {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .rail-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      color: var(--text-main);
+      padding: 8px;
+      border-radius: 8px;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .rail-btn:hover, .rail-btn.active {
+      background-color: var(--bubble-incoming);
+      transform: scale(1.05);
+    }
+
+    /* MIDDLE SIDEBAR PANEL (DM LIST / DISCOVER LIST) */
+    .sidebar-panel {
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .panel-header {
+      padding: 24px 20px 12px 20px;
+    }
+
+    .user-profile-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-meta-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .archive-toggle-btn {
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    .archive-toggle-btn:hover {
+      background-color: var(--bubble-incoming);
+    }
+
+    /* STATUS INDICATORS */
+    .dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--emerald-color);
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px var(--emerald-color);
+      transition: background-color 0.3s;
+    }
+    .dot.offline {
+      background-color: var(--danger-color);
+      box-shadow: 0 0 8px var(--danger-color);
+    }
+
+    .sidebar-tabs {
+      display: flex;
+      margin: 12px 20px 0 20px;
+      background-color: var(--bubble-incoming);
+      padding: 4px;
+      border-radius: 8px;
+      gap: 4px;
+    }
+    .sidebar-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .sidebar-tab.active {
+      background-color: var(--bg-panel);
+      color: var(--text-main);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .contacts-list {
+      flex: 1;
+      overflow-y: auto;
+      padding-top: 8px;
+    }
+
+    .contact-item {
+      padding: 12px 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background-color 0.2s;
+    }
+
+    .contact-item:hover, .contact-item.active {
+      background-color: var(--bubble-incoming);
+    }
+
+    .contact-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .contact-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .contact-last-msg {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+
+    .contact-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .unread-badge {
+      background-color: var(--indigo-accent);
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      border-radius: 10px;
+      padding: 2px 6px;
+    }
+
+    .contact-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .contact-item:hover .contact-actions {
+      opacity: 1;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .icon-btn:hover {
+      background-color: var(--border-color);
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: var(--bubble-incoming);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 16px;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      flex-shrink: 0;
+    }
+
+    .presence-badge {
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .presence-badge.online {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--emerald-color);
+    }
+    .presence-badge.offline {
+      background-color: rgba(237, 73, 86, 0.15);
+      color: var(--danger-color);
+    }
+
+    /* RIGHT MESSAGE PANEL CANVAS */
+    .chat-panel {
+      background-color: var(--bg-main);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+
+    .chat-info-area {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .typing-status {
+      font-size: 12px;
+      color: var(--indigo-accent);
+      font-weight: 500;
+    }
+
+    .secure-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--emerald-color);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+    .secure-badge:hover {
+      background-color: var(--bubble-incoming);
+    }
+
+    .safety-block {
+      display: none;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 16px 24px 0 24px;
+      font-size: 12px;
+    }
+
+    .messages-area {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* INSTAGRAM BUBBLE SPECIFICATIONS */
+    .message-container {
+      display: flex;
+      flex-direction: column;
+      max-width: 65%;
+      position: relative;
+      margin-bottom: 4px;
+    }
+
+    .message-container.outgoing {
+      align-self: flex-end;
+    }
+
+    .message-container.incoming {
+      align-self: flex-start;
+    }
+
+    .message-bubble {
+      padding: 10px 16px;
+      font-size: 14px;
+      line-height: 1.4;
+      position: relative;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .message-container.outgoing .message-bubble {
+      background: var(--bubble-outgoing-grad);
+      color: white;
+      border-radius: 18px 18px 4px 18px;
+    }
+
+    .message-container.incoming .message-bubble {
+      background-color: var(--bubble-incoming);
+      color: var(--text-main);
+      border-radius: 18px 18px 18px 4px;
+    }
+
+    .reply-quote-box {
+      background: rgba(0, 0, 0, 0.15);
+      border-left: 2px solid white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .message-meta-box {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-top: 2px;
+      font-size: 9px;
+      opacity: 0.6;
+    }
+
+    .bubble-actions {
+      position: absolute;
+      top: -24px;
+      right: 4px;
+      display: none;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 2px 4px;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .message-container:hover .bubble-actions {
+      display: flex;
+    }
+
+    .reaction-badge {
+      display: inline-flex;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 2px 4px;
+      font-size: 10px;
+      position: absolute;
+      bottom: -6px;
+      right: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+
+    .emoji-picker-popover {
+      display: none;
+      position: absolute;
+      top: -30px;
+      right: 20px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 4px 8px;
+      gap: 6px;
+      z-index: 12;
+    }
+
+    .reply-active-bar {
+      display: none;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-color);
+      padding: 8px 24px;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--indigo-accent);
+      align-items: center;
+    }
+
+    /* INSTAGRAM ROUNDED MESSAGE INPUT PILL */
+    .input-bar {
+      padding: 16px 24px;
+      background-color: var(--bg-main);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .input-inner {
+      display: flex;
+      align-items: center;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 22px;
+      padding: 4px 16px;
+      width: 100%;
+    }
+
+    .input-inner input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-size: 14px;
+      padding: 8px 0;
+      outline: none;
+      margin-bottom: 0;
+    }
+
+    .input-inner input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .send-btn {
+      background: transparent;
+      border: none;
+      color: var(--indigo-accent);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: opacity 0.2s;
+    }
+
+    .send-btn:hover {
+      opacity: 0.8;
+    }
+
+    .typing-indicator {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 14px;
+      background-color: var(--bubble-incoming);
+      border-radius: 20px;
+      align-self: flex-start;
+      margin: 0 24px 16px 24px;
+    }
+
+    .typing-dot {
+      width: 5px;
+      height: 5px;
+      background-color: var(--text-muted);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    .no-chat-selected {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      color: var(--text-muted);
+      gap: 8px;
+      text-align: center;
+    }
+
+    /* RESPONSIVE MEDIA QUERIES */
+    @media (max-width: 992px) {
+      #chat-workspace {
+        grid-template-columns: 72px 300px 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      /* Mobile layout! We toggle visibility of panels based on body classes */
+      #chat-workspace {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: 1fr 60px !important;
+        height: 100vh;
+        height: 100dvh;
+      }
+
+      body.chat-active #chat-workspace {
+        grid-template-rows: 1fr !important; /* Hide bottom navigation bar when inside active chat */
+      }
+
+      .nav-rail {
+        grid-row: 2;
+        flex-direction: row !important;
+        width: 100% !important;
+        height: 60px !important;
+        padding: 0 20px !important;
+        border-right: none !important;
+        border-top: 1px solid var(--border-color);
+        justify-content: space-around !important;
+        align-items: center !important;
+        z-index: 40;
+      }
+
+      .rail-top {
+        flex-direction: row !important;
+        justify-content: space-around !important;
+        width: 100% !important;
+        gap: 0 !important;
+      }
+
+      .rail-top .icon-brand {
+        display: none !important; /* Hide brand icon in mobile bottom bar */
+      }
+
+      .sidebar-panel {
+        grid-row: 1;
+        width: 100% !important;
+        height: 100% !important;
+        display: flex;
+        border-right: none !important;
+      }
+
+      .chat-panel {
+        grid-row: 1;
+        width: 100% !important;
+        height: 100% !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 50;
+        display: none; /* hidden by default, shown when recipient is active */
+      }
+
+      body.chat-active .chat-panel {
+        display: flex !important;
+      }
+      
+      body.chat-active .sidebar-panel {
+        display: none !important;
+      }
+
+      body.chat-active .nav-rail {
+        display: none !important;
+      }
+
+      /* Make contact action options touch-visible */
+      .contact-actions {
+        opacity: 0.8 !important;
+      }
+    }
+
+    /* PWA SECURE FILE SHARING VISUAL STYLES */
+    .attach-btn-trigger {
+      background: transparent;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-main);
+      margin-right: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .attach-btn-trigger:hover {
+      opacity: 0.7;
+      transform: scale(1.1);
+    }
+
+    .attach-menu {
+      position: absolute;
+      bottom: 80px;
+      left: 24px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      z-index: 60;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .attach-menu button {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background-color 0.2s;
+      white-space: nowrap;
+    }
+
+    .attach-menu button:hover {
+      background-color: var(--bubble-incoming);
+    }
+
+    .file-thumbnail {
+      max-width: 220px;
+      max-height: 180px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: block;
+      border: 1px solid var(--border-color);
+      transition: transform 0.2s;
+    }
+    .file-thumbnail:hover {
+      transform: scale(1.02);
+    }
+
+    .file-loader-box {
+      width: 200px;
+      height: 120px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg-main);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .doc-icon-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+    
+    .file-bubble-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ANIMATIONS */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideInRight { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+    @keyframes wave {
+      0%, 40%, 100% { transform: scaleY(0.4); }
+      20% { transform: scaleY(1.0); }
+    }
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+
+    /* Modal overlays */
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    /* Passport Card & welcome card styles */
+    .passport-card {
+      background: rgba(18, 18, 18, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 28px;
+      width: 420px;
+      max-width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.6);
+      position: relative;
+      color: var(--text-main);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    body.light-theme .passport-card {
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15);
+    }
+
+    .close-modal-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .close-modal-btn:hover {
+      background-color: var(--bubble-incoming);
+      color: var(--text-main);
+    }
+
+    @keyframes zoomIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- RECONNECTING GLASS BANNER -->
+  <div id="reconnect-banner">
+    ⚠️ Connection dropped. Reconnecting securely to network...
+  </div>
+
+  <!-- IN-APP TOAST NOTIFICATION -->
+  <div id="notification-toast" onclick="handleToastClick()">
+    <strong style="color: var(--indigo-accent); display: block; margin-bottom: 4px;">🛡️ New E2EE Message</strong>
+    <span id="toast-sender" style="font-weight: bold;">User</span>: 
+    <span id="toast-text">Secure packet received</span>
+  </div>
+
+  <!-- CRITICAL KEY WARNING MODAL (MITM ATTACK DETECTED) -->
+  <div id="mitm-modal">
+    <div class="mitm-card">
+      <div style="font-size: 48px; color: var(--danger-color); margin-bottom: 16px;">⚠️</div>
+      <h2 style="color: var(--danger-color); margin-bottom: 12px; font-size: 20px;">Security Alert</h2>
+      <h3 style="margin-bottom: 12px; font-weight: 600; font-size: 16px;">Cryptographic Key Substitution Detected!</h3>
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+        The public key for <strong id="mitm-peer-name" style="color: var(--text-main);">user</strong> has changed on the server. 
+        This could indicate an active **Server MITM key-replacement attack**! 
+        Please re-verify the Safety Number fingerprint out-of-band.
+      </p>
+      <button onclick="dismissMitmAlert()" class="primary" style="background-color: var(--danger-color);">I Understand, Update Key</button>
+    </div>
+  </div>
+
+  <!-- 1. AUTH SCREEN -->
+  <div id="auth-screen">
+    <div class="icon-brand">🛡️</div>
+    <h2 style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">Aegis Messenger</h2>
+    <div class="subtitle" style="margin-bottom: 24px; color: var(--text-muted); font-size: 13px; text-transform: lowercase;">end-to-end encrypted messenger</div>
+
+    <form id="auth-form" onsubmit="handleAuth(event)">
+      <input type="text" id="username-input" placeholder="Enter secure username..." required autocomplete="off">
+      <input type="password" id="password-input" placeholder="Enter identity password..." required>
+      <button type="submit" id="auth-btn" class="primary" style="width: 100%;">Unlock Identity Vault</button>
+    </form>
+    
+    <div style="margin-top: 24px; text-align: center; font-size: 12px;">
+      <span id="auth-switch-text" style="color: var(--text-muted);">First time using Aegis on this device?</span>
+      <a href="#" id="auth-switch-link" onclick="toggleAuthMode(); return false;" style="color: var(--indigo-accent); text-decoration: none; font-weight: 600; margin-left: 6px;">Register New Vault</a>
+    </div>
+    
+    <div style="margin-top: 16px; text-align: center;">
+      <button onclick="toggleWelcomeModal(true)" style="background: none; border: none; color: var(--text-muted); font-size: 11px; text-decoration: underline; cursor: pointer; font-weight: 500;">Learn how Aegis protects your privacy 🛡️</button>
+    </div>
+  </div>
+
+  <!-- 2. INSTAGRAM-STYLE WORKSPACE -->
+  <div id="chat-workspace">
+    <!-- Slim Left Navigation Rail (Desktop) / Bottom Nav Bar (Mobile) -->
+    <div class="nav-rail">
+      <div class="rail-top">
+        <div class="icon-brand" style="font-size: 32px; cursor: default; margin-bottom: 12px;">🛡️</div>
+        <button class="rail-btn active" id="rail-chats-btn" onclick="navigateToPanel('chats')" title="Direct Messages">💬</button>
+        <button class="rail-btn" id="rail-discover-btn" onclick="navigateToPanel('discover')" title="Search & Discovery">🔍</button>
+        <button class="rail-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Switch Light/Dark Mode">☀️</button>
+        <button class="rail-btn" id="rail-passport-btn" onclick="togglePassportModal()" title="Secure Passport (QR Pairing)">🪪</button>
+        <button class="rail-btn" id="rail-welcome-btn" onclick="toggleWelcomeModal(true)" title="About Aegis & Privacy">ℹ️</button>
+      </div>
+      <button class="rail-btn" onclick="handleLogout()" title="Lock Vault & Logout" style="color: var(--danger-color);">🚪</button>
+    </div>
+
+    <!-- Active Sidebar Panel -->
+    <div class="sidebar-panel">
+      <!-- Chat List view header -->
+      <div class="panel-header" id="sidebar-chats-header">
+        <div class="user-profile-header">
+          <div class="avatar" style="width: 36px; height: 36px; font-size: 13px;" id="my-avatar">-</div>
+          <div class="user-meta-info">
+            <span id="my-name-display" style="font-weight: 700; font-size: 14px;">username</span>
+            <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 1px;">
+              <span id="status-dot" class="dot offline"></span>
+              <span id="status-text" style="color: var(--text-muted);">offline</span>
+            </div>
+          </div>
+          <button id="archive-toggle-btn" class="archive-toggle-btn" onclick="toggleArchivedList()" title="Toggle Archived Chats">📦</button>
+        </div>
+
+        <!-- Sidebar tabs switcher for easy direct navigation -->
+        <div class="sidebar-tabs">
+          <button id="tab-chats-btn" class="sidebar-tab active" onclick="navigateToPanel('chats')">Direct</button>
+          <button id="tab-discover-btn" class="sidebar-tab" onclick="navigateToPanel('discover')">Discover</button>
+        </div>
+
+        <input type="text" id="search-input" placeholder="Search direct chats..." oninput="handleSearch()" style="margin-top: 12px; margin-bottom: 0; padding: 8px 12px; font-size: 13px; border-radius: 8px; background-color: var(--bubble-incoming); border: none;">
+      </div>
+
+      <!-- Discover view header -->
+      <div class="panel-header" id="sidebar-discover-header" style="display: none;">
+        <div class="user-profile-header">
+          <div class="avatar" style="width: 36px; height: 36px; font-size: 13px;" id="my-avatar-discover">-</div>
+          <div class="user-meta-info">
+            <span style="font-weight: 700; font-size: 14px;">Discover</span>
+            <span style="color: var(--text-muted); font-size: 11px;">Connect to secure nodes</span>
+          </div>
+        </div>
+
+        <!-- Sidebar tabs switcher for discover view too -->
+        <div class="sidebar-tabs">
+          <button id="tab-chats-btn-discover" class="sidebar-tab" onclick="navigateToPanel('chats')">Direct</button>
+          <button id="tab-discover-btn-discover" class="sidebar-tab active" onclick="navigateToPanel('discover')">Discover</button>
+        </div>
+
+        <input type="text" id="discover-search-input" placeholder="Type username to search..." oninput="handleDiscoverSearch()" autocomplete="off" style="margin-top: 12px; margin-bottom: 0; padding: 8px 12px; font-size: 13px; border-radius: 8px; background-color: var(--bubble-incoming); border: none;">
+      </div>
+
+      <!-- Roster contacts feed -->
+      <div class="contacts-list" id="contacts-container">
+        <!-- Dyn list -->
+      </div>
+    </div>
+
+    <!-- Right Canvas Chat Panel -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <!-- Back button for mobile viewport navigation -->
+        <button id="mobile-back-btn" class="icon-btn" onclick="closeChatMobile()" style="display: none; margin-right: 12px; font-size: 20px; color: var(--text-main); align-items: center; justify-content: center;" title="Back to Inbox">
+          ←
+        </button>
+        <div class="chat-info-area" style="flex: 1;">
+          <h3 id="chat-title" style="font-size: 16px; font-weight: 600;">Secure Hub</h3>
+          <span class="typing-status" id="typing-text" style="display: none;">typing...</span>
+        </div>
+        <div class="header-actions" style="display: flex; align-items: center; gap: 8px;">
+          <button id="call-btn" class="icon-btn" onclick="initiateVoiceCall()" style="display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid var(--emerald-color); border-radius: 50%; width: 34px; height: 34px; font-size: 14px; align-items: center; justify-content: center; color: var(--emerald-color); cursor: pointer;" title="Start P2P E2EE Voice Call">
+            📞
+          </button>
+          <div class="secure-badge" id="e2ee-badge" style="display: none;" onclick="toggleSafetyBlock()">
+            <span>🔒 Secure Lock</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expandable Safety Numbers Fingerprint -->
+      <div class="safety-block" id="safety-container">
+        <strong style="display: block; margin-bottom: 4px;">Manual Verification Fingerprint (Safety Number):</strong>
+        <div style="font-family: monospace; font-size: 12px; color: var(--indigo-accent); word-break: break-all; background: var(--bg-main); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 12px;" id="fingerprint-display">
+          -
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+          <button class="primary" id="verify-partner-btn" onclick="verifyActivePartner()" style="padding: 6px 12px; font-size: 11px; border-radius: 6px; border: none; font-weight: 600;">🛡️ Verify Identity Key</button>
+          <button class="secondary" id="toggle-receipts-btn" onclick="toggleReadReceipts()" style="padding: 6px 12px; font-size: 11px; border-radius: 6px; border: none; font-weight: 600; background: var(--bg-main); color: var(--text-main);">💬 Toggle Read Receipts</button>
+        </div>
+      </div>
+
+      <!-- Messages canvas -->
+      <div class="messages-area" id="messages-container">
+        <div class="no-chat-selected" id="no-chat-placeholder">
+          <div style="font-size: 48px; margin-bottom: 12px;">💬</div>
+          <h3 style="font-weight: 600; color: var(--text-main); font-size: 18px;">Your Direct Messages</h3>
+          <p style="font-size: 14px; color: var(--text-muted); padding: 0 40px; line-height: 1.5; max-width: 420px;">Send a private, fully client-side encrypted message to a friend. All encryption happens strictly locally.</p>
+          <button class="primary" style="margin-top: 16px; padding: 10px 20px;" onclick="navigateToPanel('discover')">Discover Contacts</button>
+        </div>
+      </div>
+
+      <!-- Typing Indicator -->
+      <div class="typing-indicator" id="live-typing-indicator">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+
+      <!-- Active Quote Card -->
+      <div class="reply-active-bar" id="reply-active-indicator">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span>↩️</span>
+          <div>Replying to <span id="reply-active-sender" style="font-weight: 600; color: var(--text-main);">sender</span>: <span id="reply-active-text" style="font-style: italic;">msg</span></div>
+        </div>
+        <button onclick="cancelActiveReply()" class="icon-btn" style="padding: 2px 6px;">✕</button>
+      </div>
+
+      <!-- Rounded Instagram-Style Message Pill Input -->
+      <div class="input-bar" id="input-container" style="display: none; position: relative;">
+        <!-- Floating Attach Options Menu -->
+        <div class="attach-menu" id="attach-menu-options" style="display: none;">
+          <button onclick="triggerPicker('camera')">📷 Take Photo (Camera)</button>
+          <button onclick="triggerPicker('gallery')">🖼️ Choose Photo (Gallery)</button>
+          <button onclick="triggerPicker('document')">📄 Share File (.pdf, .txt)</button>
+        </div>
+        
+        <!-- Hidden inputs for file selecting -->
+        <input type="file" id="camera-picker" accept="image/*" capture="environment" style="display: none;" onchange="handleAttachment(event)">
+        <input type="file" id="gallery-picker" accept="image/*" style="display: none;" onchange="handleAttachment(event)">
+        <input type="file" id="doc-picker" accept=".pdf,.txt" style="display: none;" onchange="handleAttachment(event)">
+
+        <div class="input-inner">
+          <button onclick="toggleAttachMenu()" class="attach-btn-trigger" title="Attach media">📎</button>
+          <input type="text" id="message-input" placeholder="Message..." autocomplete="off" oninput="handleTypingEvent(event)" onkeydown="if(event.key === 'Enter') handleSend()">
+          <button onclick="handleSend()" class="send-btn">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECURE IDENTITY PASSPORT MODAL (QR CODE PAIRING) -->
+  <div id="passport-modal" class="modal-overlay" style="display: none;" onclick="closePassportModal(event)">
+    <div class="passport-card" onclick="event.stopPropagation()">
+      <button class="close-modal-btn" onclick="togglePassportModal()">✕</button>
+      <div style="font-size: 32px; margin-bottom: 8px;">🛡️</div>
+      <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 4px;">Aegis Secure Passport</h3>
+      <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 16px;">Scan to establish zero-trust pairing</span>
+      
+      <!-- Device identity fingerprint display -->
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: -10px; margin-bottom: 16px; word-break: break-all;">
+        Device Identity: <span id="my-identity-fingerprint" style="font-family: monospace; color: var(--indigo-accent); font-weight: bold;"></span>
+      </div>
+      
+      <!-- QR code canvas container -->
+      <div id="qrcode-container" style="background: white; padding: 12px; border-radius: 12px; display: inline-block; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 184px; height: 184px;"></div>
+      
+      <div style="width: 100%; text-align: left; margin-top: 12px;">
+        <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">YOUR INVITE DEEP LINK:</label>
+        <input type="text" id="my-invite-link" readonly onclick="this.select(); document.execCommand('copy'); alert('Invite copied!');" style="font-size: 12px; padding: 10px; margin-bottom: 16px; cursor: pointer; text-align: center; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); width: 100%;">
+        
+        <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">PAIR VIA DEEP LINK OR QR PAYLOAD:</label>
+        <input type="text" id="peer-invite-input" placeholder="Paste peer invite or QR payload..." style="font-size: 12px; padding: 10px; margin-bottom: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); width: 100%;">
+        <button class="primary" style="width: 100%; padding: 10px; border-radius: 6px;" onclick="handlePairingInput()">⚡ Establish Pair Connection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZERO-TRUST P2P E2EE CALLING OVERLAY -->
+  <div id="call-overlay" class="modal-overlay" style="display: none; justify-content: center; align-items: center; z-index: 10000; background: rgba(0,0,0,0.85); backdrop-filter: blur(16px);">
+    <div class="passport-card" style="width: 320px; text-align: center; padding: 32px; border: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.45); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);">
+      <div id="call-avatar" style="width: 80px; height: 80px; border-radius: 50%; background: var(--indigo-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin: 0 auto 20px auto; filter: drop-shadow(0 0 12px var(--indigo-accent));">-</div>
+      <h3 id="call-peer-name" style="font-size: 20px; font-weight: 700; color: white; margin-bottom: 8px;">Username</h3>
+      <div id="call-status" style="font-size: 13px; color: var(--text-muted); margin-bottom: 32px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Ringing...</div>
+      
+      <!-- Pulsing WebRTC connecting wave element -->
+      <div id="calling-waves" style="display: none; justify-content: center; gap: 4px; margin-bottom: 32px;">
+        <span style="display: inline-block; width: 6px; height: 16px; background: var(--emerald-color); border-radius: 3px; animation: wave 1.2s infinite ease-in-out;"></span>
+        <span style="display: inline-block; width: 6px; height: 24px; background: var(--emerald-color); border-radius: 3px; animation: wave 1.2s infinite ease-in-out; animation-delay: -1.0s;"></span>
+        <span style="display: inline-block; width: 6px; height: 32px; background: var(--emerald-color); border-radius: 3px; animation: wave 1.2s infinite ease-in-out; animation-delay: -0.8s;"></span>
+        <span style="display: inline-block; width: 6px; height: 24px; background: var(--emerald-color); border-radius: 3px; animation: wave 1.2s infinite ease-in-out; animation-delay: -0.6s;"></span>
+        <span style="display: inline-block; width: 6px; height: 16px; background: var(--emerald-color); border-radius: 3px; animation: wave 1.2s infinite ease-in-out; animation-delay: -0.4s;"></span>
+      </div>
+
+      <!-- Call Action Control Row -->
+      <div style="display: flex; justify-content: center; gap: 20px; align-items: center;">
+        <!-- Mute Button -->
+        <button id="call-mute-btn" onclick="toggleCallMute()" style="border: none; border-radius: 50%; width: 48px; height: 48px; background: rgba(255,255,255,0.1); cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 18px; color: white;" title="Mute Microphone">🎤</button>
+        
+        <!-- Decline/End Button (Neon Red Hangup) -->
+        <button id="call-decline-btn" onclick="hangUpCall()" style="border: none; border-radius: 50%; width: 56px; height: 56px; background: var(--danger-color); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; box-shadow: 0 0 16px var(--danger-color);" title="Hang Up Call">❌</button>
+        
+        <!-- Accept Button (Neon Green Ringing) -->
+        <button id="call-accept-btn" onclick="acceptIncomingCall()" style="border: none; border-radius: 50%; width: 56px; height: 56px; background: var(--emerald-color); cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 24px; color: white; box-shadow: 0 0 16px var(--emerald-color);" title="Accept Call">📞</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE AND RESPECTFUL COMMUNICATION MODAL -->
+  <div id="filter-warn-modal" class="modal-overlay" style="display: none; z-index: 10001; background: rgba(0,0,0,0.85); backdrop-filter: blur(16px);">
+    <div class="passport-card" style="width: 380px; text-align: center; padding: 32px; border: 1px solid rgba(239, 73, 86, 0.25); background: rgba(20, 10, 15, 0.6); box-shadow: 0 10px 40px rgba(237, 73, 86, 0.15);" onclick="event.stopPropagation()">
+      <div style="font-size: 40px; margin-bottom: 12px; animation: pulse 1.5s infinite;">⚠️</div>
+      <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 8px; color: var(--danger-color);">Respectful Workspace Alert</h3>
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px;">
+        Aegis is dedicated to professional, high-integrity communication. Your message contains potentially inappropriate or abusive language: <strong id="filter-warn-word" style="color: var(--text-main); font-weight: 700;"></strong>.
+        <br><br>
+        Do you want to bypass this alert and send it anyway, or cancel?
+      </p>
+      <div style="display: flex; gap: 12px; width: 100%;">
+        <button onclick="handleFilterDecision(false)" class="primary" style="flex: 1; background: var(--bubble-incoming); color: var(--text-main); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; font-weight: 600;">Cancel</button>
+        <button onclick="handleFilterDecision(true)" class="primary" style="flex: 1; background: var(--danger-color); padding: 10px; border-radius: 8px; font-weight: 600; box-shadow: 0 0 12px rgba(237, 73, 86, 0.3);">Send Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY ONBOARDING & WELCOME WIZARD -->
+  <div id="welcome-modal" class="modal-overlay" style="display: none; z-index: 9999;" onclick="closeWelcomeModal(event)">
+    <div class="passport-card" style="width: 460px; padding: 36px; text-align: left; align-items: stretch;" onclick="event.stopPropagation()">
+      <button class="close-modal-btn" onclick="toggleWelcomeModal(false)">✕</button>
+      
+      <!-- Logo and Brand -->
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+        <span style="font-size: 36px;">🛡️</span>
+        <div>
+          <h2 style="font-weight: 800; font-size: 22px; letter-spacing: -0.5px; color: var(--text-main);">Welcome to Aegis</h2>
+          <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--indigo-accent); letter-spacing: 1px;">End-to-End Encrypted Messenger</span>
+        </div>
+      </div>
+
+      <!-- Slides Container -->
+      <div class="welcome-slides-container" style="min-height: 240px; position: relative; overflow: hidden; margin-bottom: 20px;">
+        
+        <!-- Slide 1: What is Aegis -->
+        <div class="welcome-slide active" id="welcome-slide-0" style="display: block;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">🛡️ What is Aegis?</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            Aegis is an ultra-secure, decentralized E2EE messenger designed to establish absolute privacy for professional and personal workspaces.
+          </p>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            By removing single points of failure, Aegis enables you to communicate, share files, and place voice calls without relying on traditional centralized trusted intermediaries.
+          </p>
+        </div>
+
+        <!-- Slide 2: Zero-Knowledge Data Management -->
+        <div class="welcome-slide" id="welcome-slide-1" style="display: none;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">🔑 Zero-Knowledge Data Management</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            Your encryption keys are derived completely client-side using industry-standard Web Crypto APIs (<code style="font-family: monospace; color: var(--emerald-color);">AES-GCM-256</code> and <code style="font-family: monospace; color: var(--emerald-color);">ECDH</code>).
+          </p>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            The server acts as a blind relayer: it never holds or receives your plaintext passwords, decryption keys, file content, or call streams. Everything is encrypted before leaving your physical device.
+          </p>
+        </div>
+
+        <!-- Slide 3: E2EE Voice Calling -->
+        <div class="welcome-slide" id="welcome-slide-2" style="display: none;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">📞 Decentralized P2P Voice Calling</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            Establish voice call connections using WebRTC direct peer-to-peer data channels. No phone numbers, cellular plans, or registrations are ever required.
+          </p>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            Aegis negotiates E2EE voice streams through cryptographic invitations. ICE candidate routing runs through blind relays to establish direct caller-to-recipient E2EE voice tunnels.
+          </p>
+        </div>
+
+        <!-- Slide 4: Respectful Communication Filter -->
+        <div class="welcome-slide" id="welcome-slide-3" style="display: none;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">💬 Respectful Workspace Compliance</h3>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            Aegis values high-grade, professional alignment. An intelligent, zero-knowledge content filter runs strictly inside your local browser container:
+          </p>
+          <ul style="font-size: 12px; color: var(--text-muted); line-height: 1.6; padding-left: 20px; list-style-type: square; margin-bottom: 12px;">
+            <li><strong style="color: var(--danger-color);">Abusive Content Warnings:</strong> Prompts on harsh profanities, with bypass or cancel options.</li>
+            <li><strong style="color: var(--indigo-accent);">Gen-Z Slang Hard-Deny:</strong> Blocks unprofessional slang (e.g. rizz, skibidi, gyatt) to uphold workspace integrity.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Slide Navigation Controls -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+        <!-- Dots indicator -->
+        <div style="display: flex; gap: 6px;" id="welcome-dots">
+          <span class="welcome-dot active" onclick="gotoWelcomeSlide(0)" style="width: 8px; height: 8px; border-radius: 50%; background: var(--indigo-accent); cursor: pointer; transition: background 0.2s;"></span>
+          <span class="welcome-dot" onclick="gotoWelcomeSlide(1)" style="width: 8px; height: 8px; border-radius: 50%; background: var(--border-color); cursor: pointer; transition: background 0.2s;"></span>
+          <span class="welcome-dot" onclick="gotoWelcomeSlide(2)" style="width: 8px; height: 8px; border-radius: 50%; background: var(--border-color); cursor: pointer; transition: background 0.2s;"></span>
+          <span class="welcome-dot" onclick="gotoWelcomeSlide(3)" style="width: 8px; height: 8px; border-radius: 50%; background: var(--border-color); cursor: pointer; transition: background 0.2s;"></span>
+        </div>
+        
+        <!-- Button actions -->
+        <div style="display: flex; gap: 8px;">
+          <button id="welcome-prev-btn" onclick="nextWelcomeSlide(-1)" class="primary" style="background: var(--bubble-incoming); color: var(--text-main); border: 1px solid var(--border-color); font-size: 12px; padding: 8px 12px; display: none;">Previous</button>
+          <button id="welcome-next-btn" onclick="nextWelcomeSlide(1)" class="primary" style="font-size: 12px; padding: 8px 16px;">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <audio id="remote-audio" autoplay style="display: none;"></audio>
+
+  <script>
+    // Register PWA Service Worker for high-performance caching & installability
+    window.addEventListener('load', async () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => console.log('Aegis Service Worker registered successfully:', reg.scope))
+          .catch((err) => console.error('Aegis Service Worker registration failed:', err));
+      }
+
+      // Auto-restore username to pre-populate login screen if they logged in before
+      const savedUser = localStorage.getItem("last_logged_in_username");
+      if (savedUser) {
+        document.getElementById('username-input').value = savedUser;
+        setAuthMode('login');
+      }
+
+      // Initialize IndexedDB for reliable offline file uploads
+      try {
+        await initIndexedDb();
+        await loadPendingFilesFromDb();
+        console.log("Aegis persistent local storage and database initialized.");
+
+        // Onboarding welcome modal check
+        if (!localStorage.getItem("aegis_welcome_dismissed")) {
+          toggleWelcomeModal(true);
+        }
+      } catch(e) {
+        console.error("Failed to initialize Aegis databases:", e);
+      }
+    });
+
+    // ==========================================
+    // PERSISTENT PRODUCTION CRYPTOGRAPHIC CORE
+    // ==========================================
+
+    let authMode = 'login';
+    let myUsername = '';
+    let myKeyPairObj = null;
+    let peerPublicKeyBase64 = '';
+    let derivedSessionKey = null;
+    let ws = null;
+    let activeRecipient = null;
+    let typingTimer = null;
+    let isTypingState = false;
+
+    // E2EE File sharing caches
+    const decryptedFileCache = {}; // fileId -> localBlobObjectURL
+    const failedUploadsCache = {}; // tempId -> File object
+
+    // Navigation panel switcher
+    let activePanel = 'chats'; // 'chats' or 'discover'
+
+    // Quoted reply state
+    let activeReplyTo = null; // { messageId, text, sender }
+
+    // local settings mapping
+    let showArchivedOnly = false;
+
+    // Local histories cached inside page session
+    const chatHistories = {}; 
+    const unreadCounts = {};   
+    const outboxQueue = [];    
+
+    // Helper: Base64/Buffer Conversions
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+    function base64ToArrayBuffer(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const btn = document.getElementById('auth-btn');
+      const switchText = document.getElementById('auth-switch-text');
+      const switchLink = document.getElementById('auth-switch-link');
+      
+      if (mode === 'register') {
+        btn.innerText = "Generate & Register Identity";
+        if (switchText) switchText.innerText = "Already registered on this device?";
+        if (switchLink) switchLink.innerText = "Unlock Identity Vault";
+      } else {
+        btn.innerText = "Unlock Identity Vault";
+        if (switchText) switchText.innerText = "First time using Aegis on this device?";
+        if (switchLink) switchLink.innerText = "Register New Vault";
+      }
+    }
+
+    function toggleAuthMode() {
+      if (authMode === 'login') {
+        setAuthMode('register');
+      } else {
+        setAuthMode('login');
+      }
+    }
+
+    // Instantly toggle Light and Dark themes (Instagram Direct Styles)
+    function toggleTheme() {
+      const body = document.body;
+      const themeBtn = document.getElementById('theme-toggle-btn');
+      if (body.classList.contains('light-theme')) {
+        body.classList.remove('light-theme');
+        themeBtn.innerText = "☀️";
+      } else {
+        body.classList.add('light-theme');
+        themeBtn.innerText = "🌙";
+      }
+    }
+
+    // Three-pane switch layout (preventing any overlays or alignment issues)
+    // Three-pane switch layout (preventing any overlays or alignment issues)
+    function navigateToPanel(panel) {
+      activePanel = panel;
+      
+      // Reset active state for all rail buttons
+      document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.remove('active'));
+      // Reset active state for all sidebar tab buttons
+      document.querySelectorAll('.sidebar-tab').forEach(btn => btn.classList.remove('active'));
+      
+      if (panel === 'chats') {
+        document.getElementById('rail-chats-btn').classList.add('active');
+        
+        // Sync active state on both DMs tab instances
+        const tabChats = document.getElementById('tab-chats-btn');
+        if (tabChats) tabChats.classList.add('active');
+        const tabChatsDisc = document.getElementById('tab-chats-btn-discover');
+        if (tabChatsDisc) tabChatsDisc.classList.add('active');
+
+        document.getElementById('sidebar-chats-header').style.display = 'block';
+        document.getElementById('sidebar-discover-header').style.display = 'none';
+        syncContacts();
+      } else {
+        document.getElementById('rail-discover-btn').classList.add('active');
+        
+        // Sync active state on both Discover tab instances
+        const tabDisc = document.getElementById('tab-discover-btn');
+        if (tabDisc) tabDisc.classList.add('active');
+        const tabDiscDisc = document.getElementById('tab-discover-btn-discover');
+        if (tabDiscDisc) tabDiscDisc.classList.add('active');
+
+        document.getElementById('sidebar-chats-header').style.display = 'none';
+        document.getElementById('sidebar-discover-header').style.display = 'block';
+        handleDiscoverSearch();
+      }
+    }
+
+    // Close chat panel mobile helper
+    function closeChatMobile() {
+      document.body.classList.remove('chat-active');
+      activeRecipient = null;
+      syncContacts();
+    }
+
+    // AUTH PROCESS: Generate / Unlock Identity
+    async function handleAuth(event) {
+      event.preventDefault();
+      const usernameInput = document.getElementById('username-input');
+      const passwordInput = document.getElementById('password-input');
+      
+      const username = usernameInput.value.trim().toLowerCase();
+      const password = passwordInput.value;
+
+      if (!username || !password) return;
+      document.getElementById('auth-btn').innerText = "Processing Key Vault...";
+
+      try {
+        if (authMode === 'register') {
+          if (localStorage.getItem(`enc_priv_${username}`)) {
+            alert("An identity for this user already exists on this device!");
+            document.getElementById('auth-btn').innerText = "Generate & Register Identity";
+            return;
+          }
+
+          const keyPair = await window.crypto.subtle.generateKey(
+            { name: "ECDH", namedCurve: "P-256" },
+            true,
+            ["deriveKey", "deriveBits"]
+          );
+
+          const exportedPub = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+          const exportedPriv = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+          const pubBase64 = arrayBufferToBase64(exportedPub);
+
+          const salt = window.crypto.getRandomValues(new Uint8Array(16));
+          const wrappingKey = await deriveWrappingKeyFromPassword(password, salt);
+
+          const wrapIv = window.crypto.getRandomValues(new Uint8Array(12));
+          const encryptedPriv = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: wrapIv },
+            wrappingKey,
+            exportedPriv
+          );
+
+          localStorage.setItem(`enc_priv_${username}`, arrayBufferToBase64(encryptedPriv));
+          localStorage.setItem(`salt_${username}`, arrayBufferToBase64(salt));
+          localStorage.setItem(`wrap_iv_${username}`, arrayBufferToBase64(wrapIv));
+          localStorage.setItem(`pub_${username}`, pubBase64);
+
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, publicKey: pubBase64 })
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          myKeyPairObj = keyPair;
+        } else {
+          // UNLOCK
+          const encPriv = localStorage.getItem(`enc_priv_${username}`);
+          const saltBase64 = localStorage.getItem(`salt_${username}`);
+          const wrapIvBase64 = localStorage.getItem(`wrap_iv_${username}`);
+          const pubBase64 = localStorage.getItem(`pub_${username}`);
+
+          if (!encPriv || !saltBase64 || !wrapIvBase64 || !pubBase64) {
+            alert("No secure vault found for this username on this device!");
+            setAuthMode('register');
+            return;
+          }
+
+          const salt = new Uint8Array(base64ToArrayBuffer(saltBase64));
+          const wrappingKey = await deriveWrappingKeyFromPassword(password, salt);
+
+          const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64));
+          const encPrivBuffer = base64ToArrayBuffer(encPriv);
+
+          let decryptedPrivBytes;
+          try {
+            decryptedPrivBytes = await window.crypto.subtle.decrypt(
+              { name: "AES-GCM", iv: wrapIv },
+              wrappingKey,
+              encPrivBuffer
+            );
+          } catch (err) {
+            alert("Invalid password! Failed to unwrap key vault.");
+            document.getElementById('auth-btn').innerText = "Unlock Identity";
+            return;
+          }
+
+          const privKeyObj = await window.crypto.subtle.importKey(
+            "pkcs8",
+            decryptedPrivBytes,
+            { name: "ECDH", namedCurve: "P-256" },
+            true,
+            ["deriveKey", "deriveBits"]
+          );
+
+          const pubKeyObj = await window.crypto.subtle.importKey(
+            "spki",
+            base64ToArrayBuffer(pubBase64),
+            { name: "ECDH", namedCurve: "P-256" },
+            true,
+            []
+          );
+
+          myKeyPairObj = { privateKey: privKeyObj, publicKey: pubKeyObj };
+
+          // Re-announce identity to the server's in-memory database to handle restarts transparently
+          await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, publicKey: pubBase64 })
+          });
+        }
+
+        myUsername = username;
+        localStorage.setItem("active_user", myUsername);
+        localStorage.setItem("last_logged_in_username", myUsername); // save for pre-population
+
+        // Restore offline unsent messages queue & pending uploads
+        loadOutboxQueue();
+        loadPendingUploadMessages();
+
+        document.getElementById('my-name-display').innerText = myUsername;
+        
+        // Render logged-in user profile avatars
+        const initial = myUsername.substring(0, 1).toUpperCase();
+        document.getElementById('my-avatar').innerText = initial;
+        document.getElementById('my-avatar-discover').innerText = initial;
+
+        initWebSocket();
+
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('chat-workspace').style.display = 'grid';
+
+        navigateToPanel('chats');
+
+        // Restore last session active chat thread
+        const lastActive = localStorage.getItem(`last_active_recipient_${myUsername}`);
+        if (lastActive) {
+          selectContact(lastActive);
+        }
+
+      } catch (e) {
+        alert("Authentication failed: " + e.message);
+        document.getElementById('auth-btn').innerText = authMode === 'register' ? "Generate & Register Identity" : "Unlock Identity";
+      }
+    }
+
+    async function deriveWrappingKeyFromPassword(password, salt) {
+      const encoder = new TextEncoder();
+      const baseKey = await window.crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+
+      return await window.crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: salt,
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    // Levenshtein distance for fuzzy typo similarity matching (Discover Users intelligent sorting)
+    function getLevenshteinDistance(a, b) {
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1, // substitution
+              matrix[i][j - 1] + 1,     // insertion
+              matrix[i - 1][j] + 1      // deletion
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    function getLevenshteinSimilarity(str1, str2) {
+      const s1 = str1.toLowerCase();
+      const s2 = str2.toLowerCase();
+      if (s1 === s2) return 1.0;
+      if (s1.length === 0 || s2.length === 0) return 0.0;
+      
+      const dist = getLevenshteinDistance(s1, s2);
+      const maxLen = Math.max(s1.length, s2.length);
+      return 1.0 - (dist / maxLen);
+    }
+
+    // Debounced case-insensitive intelligent search (Discover Users page)
+    let discoverSearchDebounceTimer = null;
+    function handleDiscoverSearch() {
+      clearTimeout(discoverSearchDebounceTimer);
+      discoverSearchDebounceTimer = setTimeout(async () => {
+        await executeDiscoverSearch();
+      }, 250); // 250ms debouncer prevents full re-computations on every keystroke
+    }
+
+    async function executeDiscoverSearch() {
+      const query = document.getElementById('discover-search-input').value.trim();
+      const container = document.getElementById('contacts-container');
+      
+      if (!query) {
+        // Render Suggested list (everyone registered) to avoid dead ends
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        renderDiscoverSearchList(data.users.map(u => ({ username: u, fingerprint: 'Public key indexed', status: 'offline' })), container);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/users/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        // Intelligent Hybrid Sorting scoring model
+        const scoredCandidates = data.users.map(item => {
+          const exactMatch = (item.username.toLowerCase() === query.toLowerCase()) ? 1 : 0;
+          const prefixMatch = (item.username.toLowerCase().startsWith(query.toLowerCase())) ? 1 : 0;
+          const containsMatch = (item.username.toLowerCase().includes(query.toLowerCase())) ? 1 : 0;
+          const fuzzySimilarity = getLevenshteinSimilarity(item.username, query);
+          const onlineStatusBonus = (item.status === 'online') ? 1 : 0;
+          
+          const score = (exactMatch * 1000)
+                      + (prefixMatch * 500)
+                      + (containsMatch * 200)
+                      + (fuzzySimilarity * 100)
+                      + (onlineStatusBonus * 50);
+
+          return { ...item, sortingScore: score };
+        });
+
+        // Sort descending by score before rendering
+        scoredCandidates.sort((a, b) => b.sortingScore - a.sortingScore);
+
+        renderDiscoverSearchList(scoredCandidates, container);
+      } catch (e) {
+        container.innerHTML = `<div style="text-align: center; color: var(--danger-color); font-size: 13px; padding: 20px;">Search failed: ${e.message}</div>`;
+      }
+    }
+
+    function renderDiscoverSearchList(users, container) {
+      container.innerHTML = '';
+      const list = users.filter(u => u.username !== myUsername);
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px;">
+            No users found. Try exact username or invite link
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach(item => {
+        const isOnline = item.status === 'online';
+        const isConnected = localStorage.getItem(`peer_key_${item.username}`) != null;
+
+        const row = document.createElement('div');
+        row.className = 'contact-item';
+        row.innerHTML = `
+          <div class="avatar">${item.username.substring(0, 1).toUpperCase()}</div>
+          <div class="contact-info">
+            <div class="contact-meta">
+              <strong style="display: flex; align-items: center; gap: 6px;">
+                ${item.username}
+                <span class="presence-badge ${isOnline ? 'online' : 'offline'}" style="font-size: 9px; padding: 1px 6px;">
+                  ${isOnline ? 'online' : 'offline'}
+                </span>
+              </strong>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Fingerprint: ${item.fingerprint}</div>
+          </div>
+          <button class="primary" style="padding: 6px 12px; font-size: 11px;" onclick="initiateDiscoverChat('${item.username}')">
+            ${isConnected ? 'Chat' : 'Connect'}
+          </button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    // Connect handshake initiator in exactly 1 click
+    async function initiateDiscoverChat(peer) {
+      const res = await fetch(`/api/user/${peer}`);
+      const data = await res.json();
+      
+      localStorage.setItem(`peer_key_${peer}`, data.publicKey);
+      
+      navigateToPanel('chats');
+      selectContact(peer);
+    }
+
+    // Sync active contact cards
+    function syncContacts() {
+      if (activePanel === 'chats') {
+        const activeChats = getLocalActiveChats();
+        renderContactsList(activeChats);
+      } else {
+        handleDiscoverSearch();
+      }
+    }
+
+    function getLocalActiveChats() {
+      const active = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith(`peer_key_`)) {
+          const peer = key.replace(`peer_key_`, '');
+          if (peer !== myUsername) active.push(peer);
+        }
+      }
+      return active;
+    }
+
+    function toggleArchivedList() {
+      showArchivedOnly = !showArchivedOnly;
+      const btn = document.getElementById('archive-toggle-btn');
+      btn.innerText = showArchivedOnly ? 'Active' : 'Archived';
+      btn.style.backgroundColor = showArchivedOnly ? 'var(--indigo-accent)' : 'var(--bg-slate-800)';
+      syncContacts();
+    }
+
+    // Local Search Active Chats
+    function handleSearch() {
+      const query = document.getElementById('search-input').value.trim().toLowerCase();
+      const activeChats = getLocalActiveChats();
+      const filtered = activeChats.filter(u => u.toLowerCase().includes(query));
+      renderContactsList(filtered);
+    }
+
+    // Render contacts cards with pin/mute/archive features
+    function renderContactsList(users) {
+      const container = document.getElementById('contacts-container');
+      container.innerHTML = '';
+
+      let blockedList = JSON.parse(localStorage.getItem(`blocked_${myUsername}`) || '[]');
+
+      let contacts = users.map(user => {
+        const key = `chat_${myUsername}_${user}`;
+        const envelopes = JSON.parse(localStorage.getItem(key) || '[]');
+        
+        let lastMsgText = "🔒 Connection established";
+        let lastMsgTime = 0;
+        let lastMsgTimeStr = "";
+
+        if (envelopes.length > 0) {
+          const lastEnvelope = envelopes[envelopes.length - 1];
+          if (chatHistories[user] && chatHistories[user].length > 0) {
+            const hist = chatHistories[user];
+            const lastDecrypted = hist[hist.length - 1];
+            lastMsgText = lastDecrypted.text;
+            if (lastDecrypted.isDeleted) lastMsgText = "🗑️ This message was deleted";
+          } else {
+            lastMsgText = "🔒 Secure envelope received";
+          }
+          const date = new Date(lastEnvelope.timestamp);
+          lastMsgTime = date.getTime();
+          lastMsgTimeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        const isPinned = localStorage.getItem(`pin_${myUsername}_${user}`) === 'true';
+        const isMuted = localStorage.getItem(`mute_${myUsername}_${user}`) === 'true';
+        const isArchived = localStorage.getItem(`archive_${myUsername}_${user}`) === 'true';
+        const isBlocked = blockedList.includes(user);
+
+        return { user, lastMsgText, lastMsgTime, lastMsgTimeStr, isPinned, isMuted, isArchived, isBlocked };
+      });
+
+      contacts = contacts.filter(c => c.isArchived === showArchivedOnly);
+
+      contacts.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.lastMsgTime - a.lastMsgTime;
+      });
+
+      if (contacts.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 20px;">
+            ${showArchivedOnly ? 'No archived chats.' : 'Go to Search 🔍 to find registered users.'}
+          </div>
+        `;
+        return;
+      }
+
+      contacts.forEach(c => {
+        const unreadCount = unreadCounts[c.user] || 0;
+        const isVerified = localStorage.getItem(`verified_${myUsername}_${c.user}`) === 'true';
+        const verifiedBadge = isVerified ? ' 🛡️' : '';
+        const item = document.createElement('div');
+        item.className = `contact-item ${activeRecipient === c.user ? 'active' : ''}`;
+        
+        item.innerHTML = `
+          <div class="avatar">${c.user.substring(0, 1).toUpperCase()}</div>
+          <div class="contact-info" onclick="selectContact('${c.user}')">
+            <div class="contact-meta">
+              <span style="font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                ${c.user}${verifiedBadge} 
+                ${c.isPinned ? '📌' : ''}
+                ${c.isMuted ? '🔇' : ''}
+                ${c.isBlocked ? '<span style="color: var(--danger-color); font-size: 10px;">(blocked)</span>' : ''}
+              </span>
+              <span class="contact-time">${c.lastMsgTimeStr}</span>
+            </div>
+            <div class="contact-meta">
+              <span class="contact-last-msg">${c.lastMsgText}</span>
+              ${unreadCount > 0 && !c.isMuted ? `<span class="unread-badge">${unreadCount}</span>` : ''}
+            </div>
+          </div>
+          <div class="contact-actions">
+            <button class="icon-btn" onclick="togglePinContact('${c.user}')" title="Pin Thread">📌</button>
+            <button class="icon-btn" onclick="toggleBlockContact('${c.user}')" title="Block Thread">🚫</button>
+            <button class="icon-btn" onclick="toggleArchiveContact('${c.user}')" title="Archive Chat">${c.isArchived ? '📂' : '📦'}</button>
+            <button class="icon-btn" onclick="handleRemoveContact('${c.user}')" title="Remove Chat" style="color: var(--danger-color);">✕</button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function togglePinContact(peer) {
+      const key = `pin_${myUsername}_${peer}`;
+      const state = localStorage.getItem(key) === 'true';
+      localStorage.setItem(key, !state);
+      syncContacts();
+    }
+
+    function toggleBlockContact(peer) {
+      const key = `blocked_${myUsername}`;
+      const blocked = JSON.parse(localStorage.getItem(key) || '[]');
+      if (blocked.includes(peer)) {
+        localStorage.setItem(key, JSON.stringify(blocked.filter(p => p !== peer)));
+      } else {
+        blocked.push(peer);
+        localStorage.setItem(key, JSON.stringify(blocked));
+      }
+      syncContacts();
+    }
+
+    function handleRemoveContact(peer) {
+      if (!confirm(`Permanently delete your keys and history with ${peer}?`)) return;
+      localStorage.removeItem(`peer_key_${peer}`);
+      localStorage.removeItem(`chat_${myUsername}_${peer}`);
+      localStorage.removeItem(`pin_${myUsername}_${peer}`);
+      localStorage.removeItem(`mute_${myUsername}_${peer}`);
+      localStorage.removeItem(`archive_${myUsername}_${peer}`);
+
+      if (activeRecipient === peer) {
+        activeRecipient = null;
+        document.body.classList.remove('chat-active');
+        document.getElementById('chat-title').innerText = "Secure Hub";
+        document.getElementById('call-btn').style.display = 'none';
+        document.getElementById('e2ee-badge').style.display = 'none';
+        document.getElementById('input-container').style.display = 'none';
+        document.getElementById('no-chat-placeholder').style.display = 'flex';
+      }
+      syncContacts();
+    }
+
+    function toggleArchiveContact(peer) {
+      const key = `archive_${myUsername}_${peer}`;
+      const state = localStorage.getItem(key) === 'true';
+      localStorage.setItem(key, !state);
+      syncContacts();
+      if (activeRecipient === peer) handleLogout();
+    }
+
+    // Start secure session with derived keys
+    async function selectContact(peer) {
+      activeRecipient = peer;
+      unreadCounts[peer] = 0;
+      document.body.classList.add('chat-active');
+      
+      // Save last active chat session
+      localStorage.setItem(`last_active_recipient_${myUsername}`, peer);
+      
+      // Render active header title & presence status & verification badge
+      renderActiveChatHeader();
+      
+      document.getElementById('call-btn').style.display = 'flex';
+      document.getElementById('e2ee-badge').style.display = 'flex';
+      document.getElementById('input-container').style.display = 'flex';
+      document.getElementById('no-chat-placeholder').style.display = 'none';
+
+      peerPublicKeyBase64 = localStorage.getItem(`peer_key_${peer}`);
+
+      const savedPeerKey = localStorage.getItem(`peer_key_${peer}`);
+      // Key substitution security warning
+      const res = await fetch(`/api/user/${peer}`);
+      const data = await res.json();
+      
+      // Save active presence status to temporary local state
+      if (data.status) {
+        localStorage.setItem(`presence_${peer}`, data.status);
+      }
+      
+      if (savedPeerKey && savedPeerKey !== data.publicKey) {
+        localStorage.removeItem(`verified_${myUsername}_${peer}`); // Clear verification on mitigation alert
+        document.getElementById('mitm-peer-name').innerText = peer;
+        document.getElementById('mitm-modal').style.display = 'flex';
+        peerPublicKeyBase64 = data.publicKey;
+        return;
+      }
+      
+      // Re-populate presence and badges with active live data
+      renderActiveChatHeader();
+
+      await establishSessionKeys();
+    }
+
+    async function establishSessionKeys() {
+      deriveSafetyNumber();
+
+      const peerKeyBuffer = base64ToArrayBuffer(peerPublicKeyBase64);
+      const peerPublicKeyObj = await window.crypto.subtle.importKey(
+        "spki",
+        peerKeyBuffer,
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        []
+      );
+
+      derivedSessionKey = await window.crypto.subtle.deriveKey(
+        { name: "ECDH", public: peerPublicKeyObj },
+        myKeyPairObj.privateKey,
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      await renderMessages();
+      syncContacts();
+    }
+
+    async function dismissMitmAlert() {
+      document.getElementById('mitm-modal').style.display = 'none';
+      localStorage.setItem(`peer_key_${activeRecipient}`, peerPublicKeyBase64);
+      await establishSessionKeys();
+    }
+
+    function deriveSafetyNumber() {
+      const myPub = localStorage.getItem(`pub_${myUsername}`);
+      const peerPub = peerPublicKeyBase64;
+      const arr = [myPub, peerPub].sort();
+      const combined = arr[0] + arr[1];
+
+      const encoder = new TextEncoder();
+      window.crypto.subtle.digest("SHA-256", encoder.encode(combined)).then(hash => {
+        const hashArray = Array.from(new Uint8Array(hash));
+        const fingerprint = hashArray.map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+        document.getElementById('fingerprint-display').innerText = fingerprint;
+      });
+    }
+
+    function toggleSafetyBlock() {
+      const block = document.getElementById('safety-container');
+      block.style.display = block.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Message transmission: Optimistic UI + Quotes Support
+    async function handleSend() {
+      const blocked = JSON.parse(localStorage.getItem(`blocked_${myUsername}`) || '[]');
+      if (blocked.includes(activeRecipient)) {
+        alert("Unblock contact before sending messages!");
+        return;
+      }
+
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+      if (!text || !activeRecipient) return;
+
+      // Local Client-Side Content Filter & Slang Denier Check
+      const filterResult = checkRespectfulWordFilter(text);
+      if (filterResult.status === 'deny') {
+        alert(`❌ Message Blocked: Aegis is a professional workspace. Gen-Z slang phrases like "${filterResult.word}" are strictly prohibited!`);
+        input.value = ''; // clear the input
+        return;
+      } else if (filterResult.status === 'warn') {
+        const proceed = await showFilterWarningModal(filterResult.word);
+        if (!proceed) {
+          // Abort sending, but retain user input so they can edit
+          return;
+        }
+      }
+
+      input.value = '';
+
+      sendTypingState(false);
+
+      const msgId = 'msg_' + Date.now();
+      const timestamp = new Date().toISOString();
+
+      const optimisticMsg = {
+        id: msgId,
+        sender: myUsername,
+        text: text,
+        timestamp,
+        status: 'sending',
+        replyTo: activeReplyTo
+      };
+
+      if (!chatHistories[activeRecipient]) {
+        chatHistories[activeRecipient] = [];
+      }
+      chatHistories[activeRecipient].push(optimisticMsg);
+      renderMessages();
+
+      cancelActiveReply();
+
+      if (ws.readyState !== 1) {
+        optimisticMsg.status = 'queued';
+        outboxQueue.push({ recipient: activeRecipient, text, msgId, timestamp, replyTo: optimisticMsg.replyTo });
+        renderMessages();
+        return;
+      }
+
+      await encryptAndDispatchMessage(activeRecipient, text, msgId, timestamp, optimisticMsg.replyTo);
+    }
+
+    async function encryptAndDispatchMessage(recipient, text, msgId, timestamp, replyTo) {
+      try {
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const plaintextBytes = new TextEncoder().encode(text);
+        const encryptedBytes = await window.crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          derivedSessionKey,
+          plaintextBytes
+        );
+
+        const ivBase64 = arrayBufferToBase64(iv);
+        const ciphertextBase64 = arrayBufferToBase64(encryptedBytes);
+
+        // Register in pendingAcks for reliable retry
+        pendingAcks[msgId] = {
+          recipient,
+          text,
+          msgId,
+          timestamp,
+          replyTo,
+          attempts: 1,
+          timer: setTimeout(() => retryMessageSend(msgId), 3000)
+        };
+
+        ws.send(JSON.stringify({
+          type: 'message',
+          id: msgId,
+          recipient,
+          sender: myUsername,
+          iv: ivBase64,
+          ciphertext: ciphertextBase64,
+          replyTo
+        }));
+
+        const envelope = {
+          id: msgId,
+          sender: myUsername,
+          recipient,
+          iv: ivBase64,
+          ciphertext: ciphertextBase64,
+          timestamp,
+          replyTo
+        };
+        saveLocalEnvelope(recipient, envelope);
+
+        const hist = chatHistories[recipient] || [];
+        const msgObj = hist.find(m => m.id === msgId);
+        if (msgObj) msgObj.status = 'sent';
+        
+        renderMessages();
+        syncContacts();
+      } catch (e) {
+        console.error("Encryption failed: ", e.message);
+      }
+    }
+
+    function saveLocalEnvelope(peer, envelope) {
+      const key = `chat_${myUsername}_${peer}`;
+      const history = JSON.parse(localStorage.getItem(key) || '[]');
+      if (envelope.id && history.some(h => h.id === envelope.id)) {
+        return; // Avoid duplicate local storage entries!
+      }
+      history.push(envelope);
+      localStorage.setItem(key, JSON.stringify(history));
+    }
+
+    // Message Deletion
+    async function handleDeleteMessage(msgId) {
+      const hist = chatHistories[activeRecipient] || [];
+      const msgIndex = hist.findIndex(m => m.id === msgId);
+      if (msgIndex === -1) return;
+
+      const msg = hist[msgIndex];
+      msg.isDeleted = true;
+      msg.text = "🗑️ This message was deleted";
+
+      updateLocalStorageMessageState(activeRecipient, msgId, { isDeleted: true });
+
+      ws.send(JSON.stringify({
+        type: 'delete',
+        recipient: activeRecipient,
+        messageId: msgId
+      }));
+
+      renderMessages();
+      syncContacts();
+    }
+
+    // Message Edit
+    async function handleEditMessage(msgId) {
+      const hist = chatHistories[activeRecipient] || [];
+      const msg = hist.find(m => m.id === msgId);
+      if (!msg || msg.isDeleted) return;
+
+      const now = Date.now();
+      const msgTime = new Date(msg.timestamp).getTime();
+      const fiveMinutes = 5 * 60 * 1000;
+      if (now - msgTime > fiveMinutes) {
+        alert("You can only edit messages within 5 minutes of sending!");
+        return;
+      }
+
+      const newText = prompt("Edit E2EE message:", msg.text);
+      if (!newText || newText.trim() === msg.text) return;
+
+      try {
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const plaintextBytes = new TextEncoder().encode(newText.trim());
+        const encryptedBytes = await window.crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          derivedSessionKey,
+          plaintextBytes
+        );
+
+        const ivBase64 = arrayBufferToBase64(iv);
+        const ciphertextBase64 = arrayBufferToBase64(encryptedBytes);
+
+        msg.text = newText.trim() + " (edited)";
+        updateLocalStorageMessageState(activeRecipient, msgId, {
+          iv: ivBase64,
+          ciphertext: ciphertextBase64,
+          isEdited: true
+        });
+
+        ws.send(JSON.stringify({
+          type: 'edit',
+          recipient: activeRecipient,
+          messageId: msgId,
+          iv: ivBase64,
+          ciphertext: ciphertextBase64
+        }));
+
+        renderMessages();
+      } catch (e) {
+        alert("Failed to edit message: " + e.message);
+      }
+    }
+
+    // Message Reactions
+    async function handleReactMessage(msgId, emoji) {
+      toggleEmojiPicker(msgId, false);
+
+      const hist = chatHistories[activeRecipient] || [];
+      const msg = hist.find(m => m.id === msgId);
+      if (!msg) return;
+
+      msg.reaction = emoji;
+      updateLocalStorageMessageState(activeRecipient, msgId, { reaction: emoji });
+
+      ws.send(JSON.stringify({
+        type: 'reaction',
+        recipient: activeRecipient,
+        messageId: msgId,
+        emoji
+      }));
+
+      renderMessages();
+    }
+
+    function updateLocalStorageMessageState(peer, msgId, updates) {
+      const key = `chat_${myUsername}_${peer}`;
+      const history = JSON.parse(localStorage.getItem(key) || '[]');
+      
+      const index = history.findIndex(h => h.id === msgId);
+      if (index !== -1) {
+        history[index] = { ...history[index], ...updates };
+        localStorage.setItem(key, JSON.stringify(history));
+      }
+    }
+
+    function initiateReplyToMessage(msgId, text, sender) {
+      activeReplyTo = { messageId: msgId, text, sender };
+      document.getElementById('reply-active-text').innerText = `${sender}: "${text}"`;
+      document.getElementById('reply-active-indicator').style.display = 'flex';
+      document.getElementById('message-input').focus();
+    }
+
+    function cancelActiveReply() {
+      activeReplyTo = null;
+      document.getElementById('reply-active-indicator').style.display = 'none';
+    }
+
+    function toggleEmojiPicker(msgId, show) {
+      const picker = document.getElementById(`picker-${msgId}`);
+      if (picker) picker.style.display = show ? 'flex' : 'none';
+    }
+
+    // In-App Toast
+    function triggerNotificationToast(sender, text) {
+      if (localStorage.getItem(`mute_${myUsername}_${sender}`) === 'true') return;
+
+      document.getElementById('toast-sender').innerText = sender;
+      document.getElementById('toast-text').innerText = text.substring(0, 30) + (text.length > 30 ? '...' : '');
+      const toast = document.getElementById('notification-toast');
+      toast.style.display = 'block';
+
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 4000);
+    }
+
+    function handleToastClick() {
+      const sender = document.getElementById('toast-sender').innerText;
+      document.getElementById('notification-toast').style.display = 'none';
+      selectContact(sender);
+    }
+
+    // Render message log bubbles
+    async function renderMessages() {
+      const container = document.getElementById('messages-container');
+      container.innerHTML = '';
+
+      if (!activeRecipient || !derivedSessionKey) return;
+
+      const history = chatHistories[activeRecipient] || [];
+
+      // Lazy load local storage cache
+      if (history.length === 0) {
+        const key = `chat_${myUsername}_${activeRecipient}`;
+        const envelopes = JSON.parse(localStorage.getItem(key) || '[]');
+        
+        for (const envelope of envelopes) {
+          try {
+            let plaintext = "";
+            if (envelope.isDeleted) {
+              plaintext = "🗑️ This message was deleted";
+            } else {
+              const ivBytes = new Uint8Array(base64ToArrayBuffer(envelope.iv));
+              const ciphertextBytes = base64ToArrayBuffer(envelope.ciphertext);
+
+              const decryptedBytes = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBytes },
+                derivedSessionKey,
+                ciphertextBytes
+              );
+              plaintext = new TextDecoder().decode(decryptedBytes);
+              if (envelope.isEdited) plaintext += " (edited)";
+            }
+
+            history.push({
+              id: envelope.id || 'local_' + Math.random(),
+              sender: envelope.sender,
+              text: plaintext,
+              timestamp: envelope.timestamp,
+              status: envelope.status || 'sent',
+              isDeleted: envelope.isDeleted,
+              reaction: envelope.reaction,
+              replyTo: envelope.replyTo,
+              isFile: envelope.isFile
+            });
+          } catch (e) {
+            console.error("Local decrypt rebuild error: ", e.message);
+          }
+        }
+      }
+
+      if (history.length === 0) {
+        container.innerHTML = `
+          <div class="no-chat-selected">
+            <span>🔒 Messages are encrypted client-side. The server has no knowledge of this plaintext conversation.</span>
+          </div>
+        `;
+        return;
+      }
+
+      history.forEach(msg => {
+        const isOutgoing = msg.sender === myUsername;
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-container ${isOutgoing ? 'outgoing' : 'incoming'}`;
+        wrapper.id = `msg-container-${msg.id}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble ${msg.status === 'sending' ? 'pending' : ''}`;
+        
+        let replyBlock = '';
+        if (msg.replyTo) {
+          replyBlock = `
+            <div class="reply-quote-box">
+              <strong>${msg.replyTo.sender}</strong>: ${msg.replyTo.text}
+            </div>
+          `;
+        }
+
+        const date = new Date(msg.timestamp);
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        let statusSymbol = "✓";
+        if (msg.status === 'sending') statusSymbol = "🕒";
+        else if (msg.status === 'queued') statusSymbol = "⏸️";
+        else if (msg.status === 'delivered') statusSymbol = "✓✓";
+        else if (msg.status === 'read') statusSymbol = `<span style="color: var(--indigo-accent); font-weight: bold; filter: drop-shadow(0 0 2px var(--indigo-accent));">✓✓</span>`;
+        else if (msg.status === 'failed') statusSymbol = `<span style="color: var(--danger-color); font-weight: bold;">⚠️</span>`;
+
+        let isFile = msg.isFile;
+        let fileMeta = null;
+        if (isFile && msg.text) {
+          try {
+            fileMeta = JSON.parse(msg.text);
+          } catch(e) {
+            console.error("Failed to parse file metadata:", e);
+          }
+        }
+
+        if (isFile) {
+          if (msg.status === 'sending' && !fileMeta) {
+            // Uploading progress state
+            const fname = msg.fileMetadata ? msg.fileMetadata.filename : 'File';
+            bubble.innerHTML = `
+              <div style="display: flex; flex-direction: column; gap: 8px; width: 220px;">
+                <div style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📤 Uploading: <strong>${fname}</strong></div>
+                <div style="width: 100%; background: rgba(255,255,255,0.2); border-radius: 6px; overflow: hidden; height: 12px; position: relative; border: 1px solid var(--border-color);">
+                  <div id="progress-bar-${msg.id}" style="width: 0%; height: 100%; background: var(--indigo-accent); text-align: center; font-size: 9px; line-height: 12px; color: white; transition: width 0.1s; font-weight: bold;">0%</div>
+                </div>
+              </div>
+              <div class="message-meta-box">
+                <span class="message-time">${timeStr}</span>
+                <span class="status-icon">🕒</span>
+              </div>
+            `;
+          } else if (fileMeta) {
+            const { fileId, filename, size, mimeType } = fileMeta;
+            const sizeStr = (size / 1024).toFixed(1) + ' KB';
+            
+            let filePreviewContent = '';
+            if (mimeType && mimeType.startsWith('image/')) {
+              if (decryptedFileCache[fileId]) {
+                filePreviewContent = `<img src="${decryptedFileCache[fileId]}" class="file-thumbnail" onclick="window.open('${decryptedFileCache[fileId]}')">`;
+              } else {
+                filePreviewContent = `
+                  <div class="file-loader-box" id="loader-${fileId}">
+                    <span class="spinner">⏳ Loading E2EE Image...</span>
+                  </div>
+                `;
+                // Lazy-load E2EE thumbnail buffer directly
+                lazyLoadFile(fileId, fileMeta);
+              }
+            } else {
+              filePreviewContent = `
+                <div class="doc-icon-box">
+                  <span style="font-size: 24px;">📄</span>
+                  <div style="display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 8px;">
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                      <strong style="font-size: 13px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">${filename}</strong>
+                      <span style="font-size: 11px; color: var(--text-muted);">${sizeStr}</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+
+            bubble.innerHTML = `
+              ${replyBlock}
+              <div class="file-bubble-wrapper">
+                ${filePreviewContent}
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                  <button class="primary" style="padding: 4px 10px; font-size: 11px; border-radius: 6px;" onclick="downloadE2eeFile('${fileId}')">💾 Download</button>
+                </div>
+              </div>
+              <div class="message-meta-box">
+                <span class="message-time">${timeStr}</span>
+                ${isOutgoing ? `<span class="status-icon">${statusSymbol}</span>` : ''}
+              </div>
+            `;
+          } else {
+            // Failed state or placeholder
+            bubble.innerHTML = `
+              <div style="display: flex; flex-direction: column; gap: 8px; width: 220px; color: var(--danger-color);">
+                <div style="font-size: 13px; font-weight: 500;">⚠️ E2EE Attachment Corrupted</div>
+              </div>
+              <div class="message-meta-box">
+                <span class="message-time">${timeStr}</span>
+                ${isOutgoing ? `<span class="status-icon">${statusSymbol}</span>` : ''}
+              </div>
+            `;
+          }
+        } else {
+          // Regular text message bubble
+          bubble.innerHTML = `
+            ${replyBlock}
+            <div>${msg.text}</div>
+            <div class="message-meta-box">
+              <span class="message-time">${timeStr}</span>
+              ${isOutgoing ? `<span class="status-icon">${statusSymbol}</span>` : ''}
+            </div>
+          `;
+        }
+
+        let replyPreviewText = msg.text;
+        if (isFile && fileMeta) {
+          replyPreviewText = `📄 File: ${fileMeta.filename}`;
+        } else if (isFile) {
+          replyPreviewText = `📄 Uploading File`;
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'bubble-actions';
+        actions.innerHTML = `
+          <button class="icon-btn" onclick="initiateReplyToMessage('${msg.id}', '${replyPreviewText.replace(/'/g, "\\'")}', '${msg.sender}')" title="Reply">↩️</button>
+          ${isOutgoing && !msg.isDeleted ? `
+            <button class="icon-btn" onclick="handleEditMessage('${msg.id}')" title="Edit">✏️</button>
+            <button class="icon-btn" onclick="handleDeleteMessage('${msg.id}')" title="Delete">🗑️</button>
+          ` : ''}
+          <button class="icon-btn" onclick="toggleEmojiPicker('${msg.id}', true)" title="React">😀</button>
+        `;
+
+        const picker = document.createElement('div');
+        picker.className = 'emoji-picker-popover';
+        picker.id = `picker-${msg.id}`;
+        const emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+        emojis.forEach(emo => {
+          const btn = document.createElement('span');
+          btn.style.cursor = 'pointer';
+          btn.style.fontSize = '16px';
+          btn.innerText = emo;
+          btn.onclick = () => handleReactMessage(msg.id, emo);
+          picker.appendChild(btn);
+        });
+
+        bubble.appendChild(actions);
+        bubble.appendChild(picker);
+
+        if (msg.reaction) {
+          const badge = document.createElement('div');
+          badge.className = 'reaction-badge';
+          badge.innerText = msg.reaction;
+          badge.onclick = () => handleReactMessage(msg.id, '');
+          bubble.appendChild(badge);
+        }
+
+        wrapper.appendChild(bubble);
+        container.appendChild(wrapper);
+      });
+
+      container.scrollTop = container.scrollHeight;
+      sendReadReceiptsForActiveChat();
+    }
+
+    // WebSocket events relays
+    function initWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', username: myUsername }));
+        document.getElementById('status-dot').className = 'dot';
+        document.getElementById('status-text').innerText = 'Connected';
+        document.getElementById('reconnect-banner').style.display = 'none';
+
+        // Transparently re-announce identity on connect/reconnect to handle server restarts
+        const pubBase64 = localStorage.getItem(`pub_${myUsername}`);
+        if (pubBase64) {
+          fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: myUsername, publicKey: pubBase64 })
+          }).catch(err => console.error("Transparent auto-register failed: ", err));
+        }
+
+        if (window.heartbeatTimer) clearInterval(window.heartbeatTimer);
+        window.heartbeatTimer = setInterval(() => {
+          if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }));
+        }, 15000);
+
+        // Reconnect flush
+        while (outboxQueue.length > 0) {
+          const item = outboxQueue.shift();
+          encryptAndDispatchMessage(item.recipient, item.text, item.msgId, item.timestamp, item.replyTo);
+        }
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const packet = JSON.parse(event.data);
+          const { sender, type } = packet;
+
+          const blocked = JSON.parse(localStorage.getItem(`blocked_${myUsername}`) || '[]');
+          if (blocked.includes(sender)) return;
+
+          if (type === 'call-offer') {
+            handleIncomingCallSignal(sender, packet.sdp);
+            return;
+          }
+
+          if (type === 'call-answer') {
+            handleCallAnswerSignal(sender, packet.sdp);
+            return;
+          }
+
+          if (type === 'call-candidate') {
+            handleCallCandidateSignal(sender, packet.candidate);
+            return;
+          }
+
+          if (type === 'call-hangup') {
+            handleCallHangupSignal(sender);
+            return;
+          }
+
+          if (type === 'ack') {
+            const { messageId, status } = packet;
+            const deliveryState = status || 'delivered';
+
+            if (pendingAcks[messageId]) {
+              clearTimeout(pendingAcks[messageId].timer);
+              delete pendingAcks[messageId];
+            }
+
+            const hist = chatHistories[sender] || [];
+            const msgObj = hist.find(m => m.id === messageId);
+            if (msgObj) {
+              const statusPrecedence = { 'sending': 0, 'queued': 0, 'sent': 1, 'delivered': 2, 'read': 3 };
+              const currentPrec = statusPrecedence[msgObj.status] || 0;
+              const newPrec = statusPrecedence[deliveryState] || 0;
+              if (newPrec > currentPrec) {
+                msgObj.status = deliveryState;
+                updateLocalStorageMessageState(sender, messageId, { status: deliveryState });
+                if (activeRecipient === sender) renderMessages();
+              }
+            }
+            return;
+          }
+
+          if (type === 'typing') {
+            if (activeRecipient === sender) {
+              document.getElementById('live-typing-indicator').style.display = packet.isTyping ? 'flex' : 'none';
+            }
+            return;
+          }
+
+          if (type === 'delete') {
+            const hist = chatHistories[sender] || [];
+            const msgObj = hist.find(m => m.id === packet.messageId);
+            if (msgObj) {
+              msgObj.isDeleted = true;
+              msgObj.text = "🗑️ This message was deleted";
+            }
+            updateLocalStorageMessageState(sender, packet.messageId, { isDeleted: true });
+            if (activeRecipient === sender) renderMessages();
+            return;
+          }
+
+          if (type === 'edit') {
+            const hist = chatHistories[sender] || [];
+            const msgObj = hist.find(m => m.id === packet.messageId);
+            if (msgObj) {
+              let sessionKey = derivedSessionKey;
+              if (sender !== activeRecipient) {
+                const res = await fetch(`/api/user/${sender}`);
+                const data = await res.json();
+                const peerPubKeyObj = await window.crypto.subtle.importKey(
+                  "spki",
+                  base64ToArrayBuffer(data.publicKey),
+                  { name: "ECDH", namedCurve: "P-256" },
+                  true,
+                  []
+                );
+
+                sessionKey = await window.crypto.subtle.deriveKey(
+                  { name: "ECDH", public: peerPubKeyObj },
+                  myKeyPairObj.privateKey,
+                  { name: "AES-GCM", length: 256 },
+                  true,
+                  ["encrypt", "decrypt"]
+                );
+              }
+
+              const ivBytes = new Uint8Array(base64ToArrayBuffer(packet.iv));
+              const ciphertextBytes = base64ToArrayBuffer(packet.ciphertext);
+              const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBytes },
+                sessionKey,
+                ciphertextBytes
+              );
+              msgObj.text = new TextDecoder().decode(decrypted) + " (edited)";
+            }
+            updateLocalStorageMessageState(sender, packet.messageId, {
+              iv: packet.iv,
+              ciphertext: packet.ciphertext,
+              isEdited: true
+            });
+            if (activeRecipient === sender) renderMessages();
+            return;
+          }
+
+          if (type === 'reaction') {
+            const hist = chatHistories[sender] || [];
+            const msgObj = hist.find(m => m.id === packet.messageId);
+            if (msgObj) msgObj.reaction = packet.emoji;
+            updateLocalStorageMessageState(sender, packet.messageId, { reaction: packet.emoji });
+            if (activeRecipient === sender) renderMessages();
+            return;
+          }
+
+          if (type === 'message') {
+            const { iv, ciphertext, timestamp, replyTo, isFile, id } = packet;
+
+            let sessionKey = derivedSessionKey;
+            if (sender !== activeRecipient) {
+              const res = await fetch(`/api/user/${sender}`);
+              const data = await res.json();
+              const peerPubKeyObj = await window.crypto.subtle.importKey(
+                "spki",
+                base64ToArrayBuffer(data.publicKey),
+                { name: "ECDH", namedCurve: "P-256" },
+                true,
+                []
+              );
+
+              sessionKey = await window.crypto.subtle.deriveKey(
+                { name: "ECDH", public: peerPubKeyObj },
+                myKeyPairObj.privateKey,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+              );
+
+              unreadCounts[sender] = (unreadCounts[sender] || 0) + 1;
+            }
+
+            const ivBytes = new Uint8Array(base64ToArrayBuffer(iv));
+            const ciphertextBytes = base64ToArrayBuffer(ciphertext);
+            const decryptedBytes = await window.crypto.subtle.decrypt(
+              { name: "AES-GCM", iv: ivBytes },
+              sessionKey,
+              ciphertextBytes
+            );
+
+            const plaintext = new TextDecoder().decode(decryptedBytes);
+
+            const envelope = { sender, recipient: myUsername, iv, ciphertext, timestamp, replyTo, isFile, id };
+            saveLocalEnvelope(sender, envelope);
+
+            // Auto-contact creation on first E2EE envelope
+            const cachedKey = localStorage.getItem(`peer_key_${sender}`);
+            if (!cachedKey) {
+              const res = await fetch(`/api/user/${sender}`);
+              const data = await res.json();
+              localStorage.setItem(`peer_key_${sender}`, data.publicKey);
+            }
+
+            if (!chatHistories[sender]) {
+              chatHistories[sender] = [];
+            }
+            
+            const msgId = id || 'local_' + Math.random();
+            const readReceiptsDisabled = localStorage.getItem(`read_receipts_disabled_${myUsername}_${sender}`) === 'true';
+            const initialStatus = (activeRecipient === sender && !readReceiptsDisabled) ? 'read' : 'delivered';
+
+            // Deduplicate incoming messages to prevent duplicate renders
+            if (!chatHistories[sender].some(m => m.id === msgId)) {
+              chatHistories[sender].push({
+                id: msgId,
+                sender,
+                text: plaintext,
+                timestamp,
+                status: initialStatus,
+                replyTo,
+                isFile
+              });
+              
+              // If it was already marked as read, update localStorage envelope status
+              if (initialStatus === 'read') {
+                updateLocalStorageMessageState(sender, msgId, { status: 'read' });
+              } else {
+                updateLocalStorageMessageState(sender, msgId, { status: 'delivered' });
+              }
+            }
+
+            // Dispatch real-time delivery ACK to original sender
+            if (id) {
+              ws.send(JSON.stringify({
+                type: 'ack',
+                recipient: sender,
+                messageId: id,
+                status: initialStatus
+              }));
+            }
+
+            if (activeRecipient === sender) {
+              await renderMessages();
+            } else {
+              triggerNotificationToast(sender, plaintext);
+              syncContacts();
+            }
+          }
+        } catch (e) {
+          console.error("WS Incoming packet listener error: ", e.message);
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status-dot').className = 'dot offline';
+        document.getElementById('status-text').innerText = 'Reconnecting...';
+        document.getElementById('reconnect-banner').style.display = 'block';
+        if (window.heartbeatTimer) clearInterval(window.heartbeatTimer);
+        setTimeout(initWebSocket, 3000);
+      };
+    }
+
+    function handleTypingEvent(event) {
+      if (!activeRecipient || ws.readyState !== 1) return;
+      if (!isTypingState) sendTypingState(true);
+
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        sendTypingState(false);
+      }, 1500);
+    }
+
+    function sendTypingState(isTyping) {
+      isTypingState = isTyping;
+      ws.send(JSON.stringify({
+        type: 'typing',
+        recipient: activeRecipient,
+        isTyping
+      }));
+    }
+
+    // ==========================================
+    // PWA E2EE FILE MESSAGING ACTIONS & ROUTINES
+    // ==========================================
+
+    function triggerPicker(type) {
+      toggleAttachMenu();
+      if (type === 'camera') {
+        document.getElementById('camera-picker').click();
+      } else if (type === 'gallery') {
+        document.getElementById('gallery-picker').click();
+      } else if (type === 'document') {
+        document.getElementById('doc-picker').click();
+      }
+    }
+
+    function toggleAttachMenu() {
+      const menu = document.getElementById('attach-menu-options');
+      menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    async function handleAttachment(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Local Client-Side Content Filter check on attachment filename
+      const filterResult = checkRespectfulWordFilter(file.name);
+      if (filterResult.status === 'deny') {
+        alert(`❌ Attachment Blocked: Aegis is a professional workspace. The file name contains prohibited Gen-Z slang: "${filterResult.word}".`);
+        event.target.value = ''; // Reset file input
+        return;
+      } else if (filterResult.status === 'warn') {
+        const proceed = await showFilterWarningModal(filterResult.word);
+        if (!proceed) {
+          event.target.value = ''; // Reset file input
+          return;
+        }
+      }
+
+      event.target.value = ''; // Reset file input
+
+      const blocked = JSON.parse(localStorage.getItem(`blocked_${myUsername}`) || '[]');
+      if (blocked.includes(activeRecipient)) {
+        alert("Unblock contact before sending attachments!");
+        return;
+      }
+
+      const tempId = 'file_' + Date.now();
+      const timestamp = new Date().toISOString();
+
+      // Cache the File object reference for potential manual upload retries
+      failedUploadsCache[tempId] = file;
+      persistPendingFile(tempId, file);
+      savePendingUploadMessages();
+
+      // 1. Optimistic Message object for live rendering
+      const optimisticMsg = {
+        id: tempId,
+        sender: myUsername,
+        text: '', // parsed dynamically in rendering engine via isFile flag
+        timestamp,
+        status: 'sending',
+        isFile: true,
+        fileMetadata: {
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type
+        }
+      };
+
+      if (!chatHistories[activeRecipient]) {
+        chatHistories[activeRecipient] = [];
+      }
+      chatHistories[activeRecipient].push(optimisticMsg);
+      renderMessages();
+
+      // 2. Encryption Pipeline + Binary Upload
+      try {
+        const fileReader = new FileReader();
+        fileReader.onload = async (fileEvent) => {
+          try {
+            const fileBytes = fileEvent.target.result;
+
+            // Generate ephemeral 256-bit symmetric FileKey
+            const fileKeyObj = await window.crypto.subtle.generateKey(
+              { name: "AES-GCM", length: 256 },
+              true,
+              ["encrypt", "decrypt"]
+            );
+
+            // Export raw bytes of FileKey to pack into E2EE envelope
+            const exportedFileKey = await window.crypto.subtle.exportKey("raw", fileKeyObj);
+            const fileKeyBase64 = arrayBufferToBase64(exportedFileKey);
+
+            // Encrypt raw file binary with AES-GCM and random 12-byte IV
+            const fileIv = window.crypto.getRandomValues(new Uint8Array(12));
+            const encryptedBytes = await window.crypto.subtle.encrypt(
+              { name: "AES-GCM", iv: fileIv },
+              fileKeyObj,
+              fileBytes
+            );
+
+            // Dispatch binary payload via XMLHttpRequest (enables real-time upload progress monitor)
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/file/upload');
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+            xhr.upload.onprogress = (progressEvent) => {
+              if (progressEvent.lengthComputable) {
+                const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+                const bar = document.getElementById(`progress-bar-${tempId}`);
+                if (bar) {
+                  bar.style.width = percent + '%';
+                  bar.innerText = percent + '%';
+                }
+              }
+            };
+
+            xhr.onload = async () => {
+              if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                const fileId = response.fileId;
+
+                // Package secure E2EE File Announcement Envelope
+                const fileMetadataEnvelope = {
+                  fileId,
+                  fileKey: fileKeyBase64,
+                  fileIv: arrayBufferToBase64(fileIv),
+                  filename: file.name,
+                  size: file.size,
+                  mimeType: file.type
+                };
+
+                // Encrypt Metadata Envelope string using the main Diffie-Hellman derived session key
+                const metadataString = JSON.stringify(fileMetadataEnvelope);
+                const mainIv = window.crypto.getRandomValues(new Uint8Array(12));
+                const plaintextBytes = new TextEncoder().encode(metadataString);
+                const encryptedMetadataBytes = await window.crypto.subtle.encrypt(
+                  { name: "AES-GCM", iv: mainIv },
+                  derivedSessionKey,
+                  plaintextBytes
+                );
+
+                const mainIvBase64 = arrayBufferToBase64(mainIv);
+                const ciphertextBase64 = arrayBufferToBase64(encryptedMetadataBytes);
+
+                // Dispatch E2EE file envelope announcement via WebSocket
+                // Register in pendingAcks for reliable retry
+                pendingAcks[tempId] = {
+                  recipient: activeRecipient,
+                  text: metadataString,
+                  msgId: tempId,
+                  timestamp,
+                  attempts: 1,
+                  isFile: true,
+                  timer: setTimeout(() => retryMessageSend(tempId), 3000)
+                };
+
+                ws.send(JSON.stringify({
+                  type: 'message',
+                  id: tempId,
+                  recipient: activeRecipient,
+                  sender: myUsername,
+                  iv: mainIvBase64,
+                  ciphertext: ciphertextBase64,
+                  isFile: true
+                }));
+
+                // Write envelope to persistent localStorage history vault
+                const envelope = {
+                  id: tempId,
+                  sender: myUsername,
+                  recipient: activeRecipient,
+                  iv: mainIvBase64,
+                  ciphertext: ciphertextBase64,
+                  timestamp,
+                  isFile: true
+                };
+                saveLocalEnvelope(activeRecipient, envelope);
+
+                // Memory cache the local blob URL so it renders instantly without downloading!
+                const blob = new Blob([fileBytes], { type: file.type });
+                decryptedFileCache[fileId] = URL.createObjectURL(blob);
+
+                // Clear retry cache on success
+                delete failedUploadsCache[tempId];
+                removePendingFile(tempId);
+                savePendingUploadMessages();
+
+                // Convert optimistic message state to permanent sent state
+                optimisticMsg.text = metadataString;
+                optimisticMsg.status = 'sent';
+
+                renderMessages();
+                syncContacts();
+              } else {
+                throw new Error("Server rejected E2EE binary upload.");
+              }
+            };
+
+            xhr.onerror = () => {
+              handleUploadFailure(tempId, file, optimisticMsg);
+            };
+
+            xhr.send(encryptedBytes);
+          } catch(err) {
+            console.error("File processing pipeline failure: ", err);
+            handleUploadFailure(tempId, file, optimisticMsg);
+          }
+        };
+        fileReader.readAsArrayBuffer(file);
+      } catch (err) {
+        console.error("FileReader boot failure: ", err);
+        handleUploadFailure(tempId, file, optimisticMsg);
+      }
+    }
+
+    function handleUploadFailure(tempId, file, optimisticMsg) {
+      optimisticMsg.status = 'failed';
+      savePendingUploadMessages();
+      renderMessages();
+      
+      const bar = document.getElementById(`progress-bar-${tempId}`);
+      if (bar) {
+        bar.style.backgroundColor = 'var(--danger-color)';
+        bar.style.width = '100%';
+        bar.innerHTML = `⚠️ Upload Failed. <span style="text-decoration: underline; cursor: pointer; font-weight: bold;" onclick="retryFileUpload('${tempId}')">Tap to Retry</span>`;
+      }
+    }
+
+    async function retryFileUpload(tempId) {
+      const file = failedUploadsCache[tempId];
+      if (!file) {
+        alert("Cached file reference lost. Please re-select the file.");
+        return;
+      }
+
+      // Evict optimistic message from log roster to avoid duplication
+      const history = chatHistories[activeRecipient] || [];
+      const index = history.findIndex(m => m.id === tempId);
+      if (index !== -1) {
+        history.splice(index, 1);
+      }
+
+      // Re-trigger E2EE upload flow
+      const fakeEvent = { target: { files: [file], value: '' } };
+      await handleAttachment(fakeEvent);
+    }
+
+    // Lazy load and decrypt E2EE images directly inside the browser shell
+    async function lazyLoadFile(fileId, fileMeta) {
+      if (decryptedFileCache[fileId]) return;
+
+      try {
+        const response = await fetch(`/api/file/${fileId}`);
+        if (!response.ok) throw new Error("Envelope not found on server.");
+        const encryptedBytes = await response.arrayBuffer();
+
+        // Unwrap the AES key bytes from base64 and import into subtle
+        const fileKeyBytes = base64ToArrayBuffer(fileMeta.fileKey);
+        const fileKeyObj = await window.crypto.subtle.importKey(
+          "raw",
+          fileKeyBytes,
+          "AES-GCM",
+          true,
+          ["decrypt"]
+        );
+
+        // Decrypt the raw binary buffer using the local browser key
+        const fileIvBytes = new Uint8Array(base64ToArrayBuffer(fileMeta.fileIv));
+        const decryptedBytes = await window.crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: fileIvBytes },
+          fileKeyObj,
+          encryptedBytes
+        );
+
+        const blob = new Blob([decryptedBytes], { type: fileMeta.mimeType });
+        const localUrl = URL.createObjectURL(blob);
+        decryptedFileCache[fileId] = localUrl;
+
+        // Hot swap DOM preview loader skeleton (bypasses full screen redraw)
+        const loader = document.getElementById(`loader-${fileId}`);
+        if (loader) {
+          const img = document.createElement('img');
+          img.src = localUrl;
+          img.className = 'file-thumbnail';
+          img.onclick = () => window.open(localUrl);
+          loader.replaceWith(img);
+        }
+      } catch (err) {
+        console.error(`Decryption failed for upload ${fileId}:`, err.message);
+        const loader = document.getElementById(`loader-${fileId}`);
+        if (loader) {
+          loader.innerHTML = `<span style="color: var(--danger-color);">⚠️ Decryption Failed</span>`;
+        }
+      }
+    }
+
+    // Trigger local download anchor for shared PDFs/Documents
+    async function downloadE2eeFile(fileId) {
+      let foundMeta = null;
+      for (const recipient in chatHistories) {
+        const history = chatHistories[recipient];
+        const msg = history.find(m => m.isFile && m.text.includes(fileId));
+        if (msg) {
+          try {
+            foundMeta = JSON.parse(msg.text);
+            break;
+          } catch(e) {}
+        }
+      }
+
+      if (!foundMeta) {
+        alert("E2EE metadata not found in local conversation log.");
+        return;
+      }
+
+      try {
+        let localUrl = decryptedFileCache[fileId];
+
+        // Decrypt on the fly if not already cached in memory
+        if (!localUrl) {
+          const response = await fetch(`/api/file/${fileId}`);
+          if (!response.ok) throw new Error("File expired or deleted from network.");
+          const encryptedBytes = await response.arrayBuffer();
+
+          const fileKeyBytes = base64ToArrayBuffer(foundMeta.fileKey);
+          const fileKeyObj = await window.crypto.subtle.importKey(
+            "raw",
+            fileKeyBytes,
+            "AES-GCM",
+            true,
+            ["decrypt"]
+          );
+
+          const fileIvBytes = new Uint8Array(base64ToArrayBuffer(foundMeta.fileIv));
+          const decryptedBytes = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: fileIvBytes },
+            fileKeyObj,
+            encryptedBytes
+          );
+
+          const blob = new Blob([decryptedBytes], { type: foundMeta.mimeType });
+          localUrl = URL.createObjectURL(blob);
+          decryptedFileCache[fileId] = localUrl;
+        }
+
+        // Programmatically trigger native user file downloader
+        const anchor = document.createElement('a');
+        anchor.href = localUrl;
+        anchor.download = foundMeta.filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+      } catch (err) {
+        alert("Failed to decrypt and save document: " + err.message);
+      }
+    }
+
+    // ==========================================================
+    // AEGIS HIGH-GRADE PAIRING, RELIABILITY & VERIFICATION SUITE
+    // ==========================================================
+
+    // Global Pending ACKs registry for automatic transmission retries
+    const pendingAcks = {};
+
+    // 1. togglePassportModal: Generate deep link & draw QR code
+    function togglePassportModal() {
+      const modal = document.getElementById('passport-modal');
+      const isVisible = modal.style.display === 'flex';
+      
+      if (isVisible) {
+        modal.style.display = 'none';
+        return;
+      }
+      
+      modal.style.display = 'flex';
+      
+      const myPub = localStorage.getItem(`pub_${myUsername}`);
+      const inviteLink = `aegis://user/${myUsername}?key=${encodeURIComponent(myPub || '')}`;
+      
+      document.getElementById('my-invite-link').value = inviteLink;
+      
+      // Populate device fingerprint display inside modal
+      const myPubGlow = myPub ? (myPub.substring(0, 16) + "...") : 'None';
+      const fpDisplay = document.getElementById('my-identity-fingerprint');
+      if (fpDisplay) fpDisplay.innerText = myPubGlow;
+      
+      // Draw QR Code
+      const qrContainer = document.getElementById('qrcode-container');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: inviteLink,
+        width: 184,
+        height: 184,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+
+    // 2. handlePairingInput: Decode QR/deep link payload & auto-connect
+    async function handlePairingInput() {
+      const input = document.getElementById('peer-invite-input').value.trim();
+      if (!input) {
+        alert("Please paste a peer invite link or QR payload.");
+        return;
+      }
+      
+      try {
+        if (!input.startsWith("aegis://user/")) {
+          alert("Invalid invite link format. Must start with aegis://user/");
+          return;
+        }
+        
+        const urlStr = input.replace("aegis://user/", "http://dummy/");
+        const url = new URL(urlStr);
+        
+        const peer = url.pathname.substring(1).trim().toLowerCase();
+        const peerKey = url.searchParams.get("key");
+        
+        if (!peer || !peerKey) {
+          alert("Invalid invite link: missing username or key.");
+          return;
+        }
+        
+        if (peer === myUsername) {
+          alert("You cannot pair with yourself!");
+          return;
+        }
+        
+        // Save peer key & mark as verified since it came via secure QR/Deep link!
+        localStorage.setItem(`peer_key_${peer}`, peerKey);
+        localStorage.setItem(`verified_${myUsername}_${peer}`, 'true');
+        
+        alert(`Successfully paired and verified with ${peer}!`);
+        
+        // Reset input and close modal
+        document.getElementById('peer-invite-input').value = '';
+        togglePassportModal();
+        
+        // Navigate & select contact
+        navigateToPanel('chats');
+        selectContact(peer);
+      } catch (err) {
+        alert("Failed to parse pairing input: " + err.message);
+      }
+    }
+
+    // 3. verifyActivePartner: Toggle local identity verification badge
+    function verifyActivePartner() {
+      if (!activeRecipient) return;
+      const key = `verified_${myUsername}_${activeRecipient}`;
+      const isVerified = localStorage.getItem(key) === 'true';
+      
+      if (isVerified) {
+        localStorage.removeItem(key);
+        alert(`Unverified identity key for ${activeRecipient}`);
+      } else {
+        localStorage.setItem(key, 'true');
+        alert(`Successfully verified identity key for ${activeRecipient}!`);
+      }
+      
+      renderActiveChatHeader();
+      syncContacts();
+    }
+
+    // 4. toggleReadReceipts: Toggle per-chat read receipt setting
+    function toggleReadReceipts() {
+      if (!activeRecipient) return;
+      const key = `read_receipts_disabled_${myUsername}_${activeRecipient}`;
+      const isDisabled = localStorage.getItem(key) === 'true';
+      
+      if (isDisabled) {
+        localStorage.removeItem(key);
+        alert("Read receipts enabled for this chat.");
+      } else {
+        localStorage.setItem(key, 'true');
+        alert("Read receipts disabled for this chat. (You won't send read checkmarks for incoming messages)");
+      }
+      
+      // Send catch-up read receipts if enabling them
+      if (!isDisabled) {
+        sendReadReceiptsForActiveChat();
+      }
+    }
+
+    // 5. renderActiveChatHeader: Update header with glowing verified shield
+    function renderActiveChatHeader() {
+      if (!activeRecipient) {
+        document.getElementById('chat-title').innerText = "Secure Hub";
+        const typingEl = document.getElementById('typing-text');
+        if (typingEl) typingEl.style.display = 'none';
+        return;
+      }
+      
+      const isVerified = localStorage.getItem(`verified_${myUsername}_${activeRecipient}`) === 'true';
+      const badge = isVerified ? ' <span style="cursor: pointer; filter: drop-shadow(0 0 4px var(--emerald-color));" title="Identity Verified Match">🛡️</span>' : '';
+      document.getElementById('chat-title').innerHTML = `${activeRecipient}${badge}`;
+      
+      const badgeEl = document.getElementById('e2ee-badge');
+      if (badgeEl) {
+        badgeEl.style.display = 'flex';
+        badgeEl.innerHTML = isVerified ? '<span>🛡️ Verified Match</span>' : '<span>🔒 Verify Peer</span>';
+        badgeEl.style.background = isVerified ? 'rgba(16, 185, 129, 0.15)' : 'rgba(0, 0, 0, 0.25)';
+        badgeEl.style.borderColor = isVerified ? 'var(--emerald-color)' : 'var(--border-color)';
+      }
+      
+      // Update typing text or online/offline status
+      const typingEl = document.getElementById('typing-text');
+      if (typingEl) {
+        const isOnline = localStorage.getItem(`presence_${activeRecipient}`) === 'online';
+        typingEl.innerText = isOnline ? 'online' : 'offline';
+        typingEl.style.display = 'block';
+        typingEl.style.color = isOnline ? 'var(--emerald-color)' : 'var(--text-muted)';
+      }
+    }
+
+    // 6. closePassportModal: Close modal when clicking background
+    function closePassportModal(event) {
+      if (event.target === document.getElementById('passport-modal')) {
+        togglePassportModal();
+      }
+    }
+
+    // 7. sendReadReceiptsForActiveChat: Dispatch read checkmarks
+    async function sendReadReceiptsForActiveChat() {
+      if (!activeRecipient || !ws || ws.readyState !== 1) return;
+      const readReceiptsDisabled = localStorage.getItem(`read_receipts_disabled_${myUsername}_${activeRecipient}`) === 'true';
+      if (readReceiptsDisabled) return;
+      
+      const history = chatHistories[activeRecipient] || [];
+      let updatedAny = false;
+      history.forEach(msg => {
+        if (msg.sender !== myUsername && msg.status !== 'read') {
+          msg.status = 'read';
+          updateLocalStorageMessageState(activeRecipient, msg.id, { status: 'read' });
+          ws.send(JSON.stringify({
+            type: 'ack',
+            recipient: activeRecipient,
+            messageId: msg.id,
+            status: 'read'
+          }));
+          updatedAny = true;
+        }
+      });
+      if (updatedAny) {
+        syncContacts();
+      }
+    }
+
+    // 8. outbox queue persistent helpers
+    function saveOutboxQueue() {
+      if (myUsername) {
+        localStorage.setItem(`outbox_queue_${myUsername}`, JSON.stringify(outboxQueue));
+      }
+    }
+
+    function loadOutboxQueue() {
+      if (!myUsername) return;
+      outboxQueue.length = 0;
+      const saved = localStorage.getItem(`outbox_queue_${myUsername}`);
+      if (saved) {
+        try {
+          const list = JSON.parse(saved);
+          list.forEach(item => outboxQueue.push(item));
+        } catch(e) {
+          console.error("Failed to parse outbox queue from local storage:", e);
+        }
+      }
+    }
+
+    // 9. pending uploads persistent helpers
+    function savePendingUploadMessages() {
+      if (!myUsername) return;
+      const list = [];
+      for (const peer in chatHistories) {
+        chatHistories[peer].forEach(msg => {
+          if (msg.isFile && (msg.status === 'failed' || msg.status === 'sending') && !msg.text) {
+            list.push({ peer, msg });
+          }
+        });
+      }
+      localStorage.setItem(`pending_uploads_${myUsername}`, JSON.stringify(list));
+    }
+
+    function loadPendingUploadMessages() {
+      if (!myUsername) return;
+      const saved = localStorage.getItem(`pending_uploads_${myUsername}`);
+      if (saved) {
+        try {
+          const list = JSON.parse(saved);
+          list.forEach(item => {
+            if (!chatHistories[item.peer]) chatHistories[item.peer] = [];
+            if (!chatHistories[item.peer].some(m => m.id === item.msg.id)) {
+              chatHistories[item.peer].push(item.msg);
+            }
+          });
+        } catch(e) {
+          console.error("Failed to restore pending upload messages:", e);
+        }
+      }
+    }
+
+    // IndexedDB for persistent crash-proof file caching
+    let db = null;
+    function initIndexedDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("aegis_db", 1);
+        request.onupgradeneeded = (e) => {
+          const database = e.target.result;
+          if (!database.objectStoreNames.contains("pending_files")) {
+            database.createObjectStore("pending_files", { keyPath: "tempId" });
+          }
+        };
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          resolve(db);
+        };
+        request.onerror = (e) => {
+          console.error("IndexedDB error:", e);
+          reject(e);
+        };
+      });
+    }
+
+    async function persistPendingFile(tempId, file) {
+      if (!db) return;
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(["pending_files"], "readwrite");
+        const store = transaction.objectStore("pending_files");
+        const request = store.put({
+          tempId: tempId,
+          name: file.name,
+          type: file.type,
+          data: file
+        });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject();
+      });
+    }
+
+    async function removePendingFile(tempId) {
+      if (!db) return;
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(["pending_files"], "readwrite");
+        const store = transaction.objectStore("pending_files");
+        const request = store.delete(tempId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject();
+      });
+    }
+
+    async function loadPendingFilesFromDb() {
+      if (!db) return;
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(["pending_files"], "readonly");
+        const store = transaction.objectStore("pending_files");
+        const request = store.getAll();
+        request.onsuccess = (e) => {
+          const results = e.target.result || [];
+          results.forEach(item => {
+            const file = new File([item.data], item.name, { type: item.type });
+            failedUploadsCache[item.tempId] = file;
+          });
+          resolve();
+        };
+        request.onerror = () => reject();
+      });
+    }
+
+    // 10. retryMessageSend: Retransmit un-ACKed messages
+    async function retryMessageSend(msgId) {
+      const pending = pendingAcks[msgId];
+      if (!pending) return;
+      
+      if (pending.attempts >= 5) {
+        console.warn(`Message ${msgId} to ${pending.recipient} failed after 5 retry attempts.`);
+        const hist = chatHistories[pending.recipient] || [];
+        const msgObj = hist.find(m => m.id === msgId);
+        if (msgObj) {
+          msgObj.status = 'failed';
+          updateLocalStorageMessageState(pending.recipient, msgId, { status: 'failed' });
+          renderMessages();
+        }
+        delete pendingAcks[msgId];
+        return;
+      }
+      
+      pending.attempts++;
+      console.log(`Retrying send for message ${msgId} to ${pending.recipient} (Attempt ${pending.attempts}/5)...`);
+      
+      if (ws && ws.readyState === 1) {
+        try {
+          if (pending.isFile) {
+            await encryptAndDispatchRawMessage(pending.recipient, pending.text, msgId, pending.timestamp, pending.replyTo, true);
+          } else {
+            await encryptAndDispatchMessageOnly(pending.recipient, pending.text, msgId, pending.timestamp, pending.replyTo);
+          }
+        } catch(e) {
+          console.error("Retransmit encrypt error:", e);
+        }
+      }
+      
+      pending.timer = setTimeout(() => retryMessageSend(msgId), 3000);
+    }
+
+    // Helper to encrypt and dispatch message without adding a new local history envelope
+    async function encryptAndDispatchMessageOnly(recipient, text, msgId, timestamp, replyTo) {
+      const peerKeyBase64 = localStorage.getItem(`peer_key_${recipient}`);
+      if (!peerKeyBase64) return;
+      
+      const peerKeyBuffer = base64ToArrayBuffer(peerKeyBase64);
+      const peerPublicKeyObj = await window.crypto.subtle.importKey(
+        "spki",
+        peerKeyBuffer,
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        []
+      );
+
+      const sessKey = await window.crypto.subtle.deriveKey(
+        { name: "ECDH", public: peerPublicKeyObj },
+        myKeyPairObj.privateKey,
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const plaintextBytes = new TextEncoder().encode(text);
+      const encryptedBytes = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        sessKey,
+        plaintextBytes
+      );
+
+      const ivBase64 = arrayBufferToBase64(iv);
+      const ciphertextBase64 = arrayBufferToBase64(encryptedBytes);
+
+      ws.send(JSON.stringify({
+        type: 'message',
+        id: msgId,
+        recipient,
+        sender: myUsername,
+        iv: ivBase64,
+        ciphertext: ciphertextBase64,
+        replyTo
+      }));
+    }
+
+    // Helper to encrypt and dispatch raw file announcement metadata JSON string
+    async function encryptAndDispatchRawMessage(recipient, text, msgId, timestamp, replyTo, isFile) {
+      const peerKeyBase64 = localStorage.getItem(`peer_key_${recipient}`);
+      if (!peerKeyBase64) return;
+      
+      const peerKeyBuffer = base64ToArrayBuffer(peerKeyBase64);
+      const peerPublicKeyObj = await window.crypto.subtle.importKey(
+        "spki",
+        peerKeyBuffer,
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        []
+      );
+
+      const sessKey = await window.crypto.subtle.deriveKey(
+        { name: "ECDH", public: peerPublicKeyObj },
+        myKeyPairObj.privateKey,
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const plaintextBytes = new TextEncoder().encode(text);
+      const encryptedBytes = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        sessKey,
+        plaintextBytes
+      );
+
+      const ivBase64 = arrayBufferToBase64(iv);
+      const ciphertextBase64 = arrayBufferToBase64(encryptedBytes);
+
+      ws.send(JSON.stringify({
+        type: 'message',
+        id: msgId,
+        recipient,
+        sender: myUsername,
+        iv: ivBase64,
+        ciphertext: ciphertextBase64,
+        isFile: isFile
+      }));
+    }
+
+    // ==========================================================
+    // ZERO-TRUST CLIENT-SIDE END-TO-END ENCRYPTED VOICE CALL SYSTEM
+    // ==========================================================
+
+    let peerConnection = null;
+    let localStream = null;
+    let callActive = false;
+    let incomingCallOffer = null; // Stores target call parameters
+    let currentCallPeer = null;   // Active calling contact username
+    const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // 1. initiateVoiceCall: Outgoing call start
+    async function initiateVoiceCall() {
+      if (!activeRecipient || ws.readyState !== 1) {
+        alert("Must be online and have a selected recipient to call!");
+        return;
+      }
+      
+      currentCallPeer = activeRecipient;
+      callActive = true;
+
+      // Show beautiful Glassmorphic Call Overlay in outgoing state
+      const overlay = document.getElementById('call-overlay');
+      overlay.style.display = 'flex';
+      document.getElementById('call-peer-name').innerText = currentCallPeer;
+      document.getElementById('call-avatar').innerText = currentCallPeer.substring(0, 1).toUpperCase();
+      document.getElementById('call-status').innerText = "Ringing...";
+      document.getElementById('call-status').style.color = "var(--text-muted)";
+      document.getElementById('calling-waves').style.display = 'none';
+
+      document.getElementById('call-accept-btn').style.display = 'none';
+      document.getElementById('call-mute-btn').style.display = 'flex';
+      document.getElementById('call-decline-btn').style.display = 'flex';
+
+      try {
+        // Capture local microphone (zero phone number needed)
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Initialize RTCPeerConnection
+        peerConnection = new RTCPeerConnection(iceServers);
+        
+        // Add local tracks to WebRTC connection
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        // Listen for remote audio track mapping
+        peerConnection.ontrack = (event) => {
+          const remoteAudio = document.getElementById('remote-audio');
+          if (remoteAudio) {
+            remoteAudio.srcObject = event.streams[0];
+          }
+        };
+
+        // Listen for local ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate && ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'call-candidate',
+              recipient: currentCallPeer,
+              candidate: event.candidate
+            }));
+          }
+        };
+
+        // Generate SDP offer
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        // Send E2EE-relayed SDP offer via WebSocket
+        ws.send(JSON.stringify({
+          type: 'call-offer',
+          recipient: currentCallPeer,
+          sdp: offer.sdp
+        }));
+
+      } catch (err) {
+        console.error("Failed to start outgoing WebRTC voice call:", err);
+        alert("Failed to initialize microphone / calling: " + err.message);
+        cleanupCallingState();
+      }
+    }
+
+    // 2. handleIncomingCallSignal: Incoming call offer receiver
+    function handleIncomingCallSignal(sender, sdp) {
+      if (callActive) {
+        // Automatically reject if busy in another call
+        ws.send(JSON.stringify({
+          type: 'call-hangup',
+          recipient: sender
+        }));
+        return;
+      }
+
+      currentCallPeer = sender;
+      callActive = true;
+      incomingCallOffer = sdp;
+
+      // Play default device digital calling ringtone
+      playRingtone();
+
+      // Show call screen overlay in incoming ringing state
+      const overlay = document.getElementById('call-overlay');
+      overlay.style.display = 'flex';
+      document.getElementById('call-peer-name').innerText = currentCallPeer;
+      document.getElementById('call-avatar').innerText = currentCallPeer.substring(0, 1).toUpperCase();
+      document.getElementById('call-status').innerText = "Incoming Voice Call...";
+      document.getElementById('call-status').style.color = "var(--emerald-color)";
+      document.getElementById('calling-waves').style.display = 'none';
+
+      document.getElementById('call-accept-btn').style.display = 'flex';
+      document.getElementById('call-mute-btn').style.display = 'none';
+      document.getElementById('call-decline-btn').style.display = 'flex';
+    }
+
+    // 3. acceptIncomingCall: Connect audio call
+    async function acceptIncomingCall() {
+      if (!incomingCallOffer || !currentCallPeer) return;
+
+      // Stop incoming call ringtone
+      stopRingtone();
+
+      document.getElementById('call-accept-btn').style.display = 'none';
+      document.getElementById('call-mute-btn').style.display = 'flex';
+      document.getElementById('call-status').innerText = "Connecting...";
+      document.getElementById('call-status').style.color = "var(--text-muted)";
+
+      try {
+        // Capture local audio
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        peerConnection = new RTCPeerConnection(iceServers);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.ontrack = (event) => {
+          const remoteAudio = document.getElementById('remote-audio');
+          if (remoteAudio) {
+            remoteAudio.srcObject = event.streams[0];
+          }
+        };
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate && ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'call-candidate',
+              recipient: currentCallPeer,
+              candidate: event.candidate
+            }));
+          }
+        };
+
+        // Set remote SDP description from caller
+        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+          type: 'offer',
+          sdp: incomingCallOffer
+        }));
+
+        // Generate SDP answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        // Dispatch SDP answer via WebSocket
+        ws.send(JSON.stringify({
+          type: 'call-answer',
+          recipient: currentCallPeer,
+          sdp: answer.sdp
+        }));
+
+        // Update UI to connected active call
+        document.getElementById('call-status').innerText = "Call Connected (P2P E2EE)";
+        document.getElementById('call-status').style.color = "var(--emerald-color)";
+        document.getElementById('calling-waves').style.display = 'flex';
+
+      } catch (err) {
+        console.error("Failed to accept incoming call:", err);
+        alert("Failed to accept voice call: " + err.message);
+        hangUpCall();
+      }
+    }
+
+    // 4. handleCallAnswerSignal: SDP answer received by caller
+    async function handleCallAnswerSignal(sender, sdp) {
+      if (!peerConnection || sender !== currentCallPeer) return;
+
+      try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+          type: 'answer',
+          sdp: sdp
+        }));
+
+        document.getElementById('call-status').innerText = "Call Connected (P2P E2EE)";
+        document.getElementById('call-status').style.color = "var(--emerald-color)";
+        document.getElementById('calling-waves').style.display = 'flex';
+      } catch (err) {
+        console.error("Failed to map answer description:", err);
+        cleanupCallingState();
+      }
+    }
+
+    // 5. handleCallCandidateSignal: Ice candidate received from peer
+    async function handleCallCandidateSignal(sender, candidate) {
+      if (!peerConnection || sender !== currentCallPeer) return;
+
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.error("Failed to append ICE candidate:", err);
+      }
+    }
+
+    // 6. handleCallHangupSignal: Remote hangup receiver
+    function handleCallHangupSignal(sender) {
+      if (sender === currentCallPeer) {
+        cleanupCallingState();
+        alert("Call ended by partner.");
+      }
+    }
+
+    // 7. hangUpCall: User-initiated call teardown
+    function hangUpCall() {
+      if (ws && ws.readyState === 1 && currentCallPeer) {
+        ws.send(JSON.stringify({
+          type: 'call-hangup',
+          recipient: currentCallPeer
+        }));
+      }
+      cleanupCallingState();
+    }
+
+    // 8. cleanupCallingState: Teardown streams and connections locally
+    function cleanupCallingState() {
+      callActive = false;
+      incomingCallOffer = null;
+      currentCallPeer = null;
+
+      // Stop call ringtone if playing
+      stopRingtone();
+
+      // Close WebRTC connection
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+
+      // Stop local microphone hardware track capture
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+
+      const remoteAudio = document.getElementById('remote-audio');
+      if (remoteAudio) remoteAudio.srcObject = null;
+
+      // Hide overlay
+      const overlay = document.getElementById('call-overlay');
+      overlay.style.display = 'none';
+      document.getElementById('calling-waves').style.display = 'none';
+    }
+
+    // 9. toggleCallMute: Ephemeral microphone track mute
+    function toggleCallMute() {
+      if (!localStream) return;
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        const btn = document.getElementById('call-mute-btn');
+        btn.innerText = audioTrack.enabled ? "🎤" : "🔇";
+        btn.style.background = audioTrack.enabled ? "rgba(255,255,255,0.1)" : "var(--danger-color)";
+      }
+    }
+
+    // PREMIUM WEB AUDIO INCOMING CALL RINGTONE SYNTHESIZER
+    let ringtoneInterval = null;
+    let ringAudioCtx = null;
+
+    function playRingtone() {
+      if (ringtoneInterval) return;
+      
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      
+      try {
+        ringAudioCtx = new AudioContextClass();
+      } catch (e) {
+        console.error("AudioContext initialization failed:", e);
+        return;
+      }
+
+      function playTone(freq, startTime, duration, type = 'sine') {
+        if (!ringAudioCtx) return;
+        
+        const osc = ringAudioCtx.createOscillator();
+        const gainNode = ringAudioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startTime);
+        
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.2, startTime + 0.05);
+        gainNode.gain.setValueAtTime(0.2, startTime + duration - 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        
+        osc.connect(gainNode);
+        gainNode.connect(ringAudioCtx.destination);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      }
+
+      function triggerMelody() {
+        if (!ringAudioCtx) return;
+        if (ringAudioCtx.state === 'suspended') {
+          ringAudioCtx.resume();
+        }
+        
+        const now = ringAudioCtx.currentTime;
+        
+        // Premium modern digital chime arpeggio (harmonic, professional, gentle)
+        playTone(880, now, 0.45, 'triangle');
+        playTone(1109.73, now + 0.2, 0.45, 'triangle');
+        playTone(1318.51, now + 0.4, 0.45, 'triangle');
+        playTone(1760, now + 0.6, 0.8, 'triangle');
+        
+        // Low warm harmonies
+        playTone(440, now, 0.6, 'sine');
+        playTone(554.37, now + 0.2, 0.6, 'sine');
+      }
+
+      triggerMelody();
+      ringtoneInterval = setInterval(triggerMelody, 2500);
+    }
+
+    function stopRingtone() {
+      if (ringtoneInterval) {
+        clearInterval(ringtoneInterval);
+        ringtoneInterval = null;
+      }
+      if (ringAudioCtx) {
+        try {
+          ringAudioCtx.close();
+        } catch (e) {
+          console.error("Failed to close AudioContext:", e);
+        }
+        ringAudioCtx = null;
+      }
+    }
+
+    // ZERO-KNOWLEDGE CLIENT-SIDE CONTENT FILTER & SLANG DENIER
+    const PROFANITY_WORDS = [
+      "abuse", "abusive", "asshole", "bitch", "bastard", "shit", "fuck", "crap",
+      "dumbass", "idiot", "slap", "kill yourself", "retard", "fucker", "motherfucker",
+      "piss", "cunt", "dick", "cock", "prick", "slut", "whore"
+    ];
+
+    const GENZ_SLANG_WORDS = [
+      "skibidi", "rizz", "gyatt", "fr fr", "no cap", "goated", "sigma", "ohio",
+      "fanum tax", "mewing", "bussin", "delulu", "looksmax", "yap", "skibidi toilet"
+    ];
+
+    function checkRespectfulWordFilter(text) {
+      if (!text) return { status: 'allow' };
+      
+      // Check Gen-Z phrases first (hard-deny)
+      for (const slang of GENZ_SLANG_WORDS) {
+        const regex = new RegExp(`\\b${slang}\\b`, 'i');
+        if (regex.test(text)) {
+          return { status: 'deny', word: slang };
+        }
+      }
+
+      // Check abusive profanity (warn)
+      for (const profanity of PROFANITY_WORDS) {
+        const regex = new RegExp(`\\b${profanity}\\b`, 'i');
+        if (regex.test(text)) {
+          return { status: 'warn', word: profanity };
+        }
+      }
+
+      return { status: 'allow' };
+    }
+
+    let filterResolve = null;
+
+    function showFilterWarningModal(word) {
+      return new Promise((resolve) => {
+        filterResolve = resolve;
+        document.getElementById('filter-warn-word').innerText = `"${word}"`;
+        document.getElementById('filter-warn-modal').style.display = 'flex';
+      });
+    }
+
+    function handleFilterDecision(allowed) {
+      document.getElementById('filter-warn-modal').style.display = 'none';
+      if (filterResolve) {
+        filterResolve(allowed);
+        filterResolve = null;
+      }
+    }
+
+    // PRIVACY ONBOARDING & WELCOME WIZARD JAVASCRIPT
+    let currentWelcomeSlideIndex = 0;
+    const TOTAL_WELCOME_SLIDES = 4;
+
+    function toggleWelcomeModal(show) {
+      const modal = document.getElementById('welcome-modal');
+      if (show) {
+        modal.style.display = 'flex';
+        gotoWelcomeSlide(0);
+      } else {
+        modal.style.display = 'none';
+        localStorage.setItem("aegis_welcome_dismissed", "true");
+      }
+    }
+
+    function closeWelcomeModal(event) {
+      if (event.target === document.getElementById('welcome-modal')) {
+        toggleWelcomeModal(false);
+      }
+    }
+
+    function gotoWelcomeSlide(index) {
+      currentWelcomeSlideIndex = index;
+      for (let i = 0; i < TOTAL_WELCOME_SLIDES; i++) {
+        const slide = document.getElementById(`welcome-slide-${i}`);
+        if (slide) slide.style.display = (i === index) ? 'block' : 'none';
+      }
+
+      // Update dots indicator styles
+      const dots = document.querySelectorAll('#welcome-dots .welcome-dot');
+      dots.forEach((dot, i) => {
+        if (i === index) {
+          dot.style.background = 'var(--indigo-accent)';
+          dot.classList.add('active');
+        } else {
+          dot.style.background = 'var(--border-color)';
+          dot.classList.remove('active');
+        }
+      });
+
+      // Update control buttons
+      const prevBtn = document.getElementById('welcome-prev-btn');
+      const nextBtn = document.getElementById('welcome-next-btn');
+
+      if (index === 0) {
+        prevBtn.style.display = 'none';
+      } else {
+        prevBtn.style.display = 'block';
+      }
+
+      if (index === TOTAL_WELCOME_SLIDES - 1) {
+        nextBtn.innerText = 'Got It! 👍';
+      } else {
+        nextBtn.innerText = 'Next →';
+      }
+    }
+
+    function nextWelcomeSlide(direction) {
+      let nextIndex = currentWelcomeSlideIndex + direction;
+      if (nextIndex < 0) return;
+      if (nextIndex >= TOTAL_WELCOME_SLIDES) {
+        toggleWelcomeModal(false);
+        return;
+      }
+      gotoWelcomeSlide(nextIndex);
+    }
+
+    function handleLogout() {
+      myKeyPairObj = null;
+      derivedSessionKey = null;
+      activeRecipient = null;
+      document.body.classList.remove('chat-active');
+      if (ws) ws.close();
+      
+      document.getElementById('chat-workspace').style.display = 'none';
+      document.getElementById('auth-screen').style.display = 'block';
+      document.getElementById('password-input').value = '';
+      setAuthMode('login');
+    }
+  </script>
+</body>
+</html>

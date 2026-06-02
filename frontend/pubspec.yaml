@@ -1,0 +1,39 @@
+name: aegis
+description: "Aegis — privacy-first encrypted messaging app"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation & State
+  provider: ^6.1.2
+
+  # Encryption & Security
+  cryptography: ^2.5.0
+  flutter_secure_storage: ^9.0.0
+
+  # Real-time and API connectivity
+  http: ^1.2.1
+  web_socket_channel: ^2.4.5
+
+  # QR Code Invite & Scanner
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.1.1
+
+  # Local DB / Cache
+  shared_preferences: ^2.2.3
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
