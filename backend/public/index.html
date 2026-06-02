@@ -737,7 +737,8 @@
       .rail-top {
         flex-direction: row !important;
         justify-content: space-around !important;
-        width: 100% !important;
+        width: auto !important;
+        flex: 1 !important;
         gap: 0 !important;
       }
 
@@ -779,6 +780,16 @@
       /* Make contact action options touch-visible */
       .contact-actions {
         opacity: 0.8 !important;
+      }
+
+      #mobile-back-btn {
+        display: flex !important;
+      }
+
+      .rail-btn {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 20px !important;
       }
     }
 
@@ -996,8 +1007,8 @@
     <div class="subtitle" style="margin-bottom: 24px; color: var(--text-muted); font-size: 13px; text-transform: lowercase;">end-to-end encrypted messenger</div>
 
     <form id="auth-form" onsubmit="handleAuth(event)">
-      <input type="text" id="username-input" placeholder="Enter secure username..." required autocomplete="off">
-      <input type="password" id="password-input" placeholder="Enter identity password..." required>
+      <input type="text" id="username-input" name="username" placeholder="Enter secure username..." required autocomplete="username">
+      <input type="password" id="password-input" name="password" placeholder="Enter identity password..." required autocomplete="current-password">
       <button type="submit" id="auth-btn" class="primary" style="width: 100%;">Unlock Identity Vault</button>
     </form>
     
@@ -1404,15 +1415,18 @@
       const btn = document.getElementById('auth-btn');
       const switchText = document.getElementById('auth-switch-text');
       const switchLink = document.getElementById('auth-switch-link');
+      const passwordInput = document.getElementById('password-input');
       
       if (mode === 'register') {
         btn.innerText = "Generate & Register Identity";
         if (switchText) switchText.innerText = "Already registered on this device?";
         if (switchLink) switchLink.innerText = "Unlock Identity Vault";
+        if (passwordInput) passwordInput.setAttribute('autocomplete', 'new-password');
       } else {
         btn.innerText = "Unlock Identity Vault";
         if (switchText) switchText.innerText = "First time using Aegis on this device?";
         if (switchLink) switchLink.innerText = "Register New Vault";
+        if (passwordInput) passwordInput.setAttribute('autocomplete', 'current-password');
       }
     }
 

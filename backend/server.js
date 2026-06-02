@@ -47,6 +47,34 @@ function saveVerificationRegistry() {
   }
 }
 
+const KEYS_FILE = path.join(__dirname, 'keys.json');
+
+function loadUserKeys() {
+  if (fs.existsSync(KEYS_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      for (const key in data) {
+        userKeys.set(key, data[key]);
+      }
+      console.log(`[USER_KEYS] Loaded ${Object.keys(data).length} user keys from disk`);
+    } catch (err) {
+      console.error('[USER_KEYS] Failed to load user keys file:', err.message);
+    }
+  }
+}
+
+function saveUserKeys() {
+  try {
+    const obj = {};
+    for (const [username, val] of userKeys.entries()) {
+      obj[username] = val;
+    }
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[USER_KEYS] Failed to save user keys:', err.message);
+  }
+}
+
 const getVerificationData = (username) => {
   const norm = username.trim().toLowerCase();
   return userVerification.get(norm) || {
@@ -83,6 +111,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR);
 }
 loadVerificationRegistry();
+loadUserKeys();
 
 // ==========================================
 // 1. REST APIS
@@ -97,6 +126,7 @@ app.post('/api/register', (req, res) => {
 
   const normalizedUser = username.trim().toLowerCase();
   userKeys.set(normalizedUser, publicKey);
+  saveUserKeys();
   console.log(`Registered user: ${normalizedUser} with public key: ${publicKey}`);
   return res.status(200).json({ success: true, username: normalizedUser });
 });
@@ -381,11 +411,12 @@ wss.on('connection', (ws) => {
       }
 
       if (packet.type === 'message') {
-        const { recipient, sender, iv, ciphertext, replyTo, isFile } = packet;
+        const { recipient, sender, iv, ciphertext, replyTo, isFile, id } = packet;
         const normalizedRecipient = recipient.trim().toLowerCase();
 
         const envelope = {
           type: 'message',
+          id, // Relaying unique message ID to prevent local ACK and retry loop duplicates!
           sender: authenticatedUser,
           iv,
           ciphertext,
